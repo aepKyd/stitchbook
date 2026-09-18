@@ -1,0 +1,964 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, maximum-scale=1, user-scalable=no">
+<title>Крестик — схемы вышивки</title>
+<meta name="description" content="Схема вышивки крестом из фотографии. Работает офлайн.">
+<meta name="theme-color" content="#eef0ea">
+<meta name="color-scheme" content="light">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Крестик">
+<link rel="stylesheet" href="fonts.css">
+<style>
+:root{
+  --paper:#eef0ea; --card:#fff; --rule:#d5d8cf; --rule-strong:#a9ae9f;
+  --ink:#181c1f; --muted:#6d7680; --link:#2f5ea8; --marker:#ffd23f; --warn:#a8442c;
+  --shadow:0 1px 0 rgba(24,28,31,.06), 0 8px 24px -12px rgba(24,28,31,.35);
+  --display:"Unbounded", "Inter", system-ui, sans-serif;
+  --body:"Inter", system-ui, -apple-system, sans-serif;
+  --mono:"JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+*{box-sizing:border-box}
+html,body{height:100%;margin:0}
+body{
+  background:var(--paper); color:var(--ink); font-family:var(--body);
+  font-size:15px; line-height:1.45; -webkit-text-size-adjust:100%;
+  overscroll-behavior:none;
+}
+button,input,select{font:inherit;color:inherit}
+button{cursor:pointer}
+.app{display:flex;flex-direction:column;height:100dvh}
+
+/* ---------- шапка ---------- */
+.top{
+  display:flex;align-items:center;gap:12px;
+  padding:10px 14px calc(10px) 14px;padding-top:calc(10px + env(safe-area-inset-top));
+  background:var(--card);border-bottom:1px solid var(--rule);
+}
+.brand{font-family:var(--display);font-weight:700;font-size:15px;letter-spacing:-.02em;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:52vw}
+.brand span{color:var(--muted);font-weight:500}
+.top .grow{flex:1}
+.pct{font-family:var(--mono);font-size:13px;font-weight:600}
+.pct small{color:var(--muted);font-weight:400}
+.bar{height:4px;background:var(--rule);border-radius:2px;overflow:hidden}
+.bar>i{display:block;height:100%;background:var(--ink);transition:width .2s}
+.topbar{width:96px}
+
+/* ---------- кнопки ---------- */
+.btn{
+  border:1px solid var(--rule-strong);background:var(--card);border-radius:9px;
+  padding:9px 13px;font-size:14px;font-weight:500;white-space:nowrap;
+}
+.btn:hover{border-color:var(--ink)}
+.btn.primary{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn.ghost{border-color:transparent;background:transparent;color:var(--muted);padding:8px}
+.btn.on{background:var(--ink);color:#fff;border-color:var(--ink)}
+.btn:disabled{opacity:.45;cursor:default}
+.row{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
+
+/* ---------- экран настройки ---------- */
+.setup{flex:1;overflow:auto;padding:18px 14px 40px;max-width:760px;width:100%;margin:0 auto}
+h1{font-family:var(--display);font-weight:700;font-size:clamp(21px,5.4vw,31px);line-height:1.22;letter-spacing:-.02em;margin:.15em 0 .45em}
+.lede{color:var(--muted);margin:0 0 22px;max-width:46ch}
+.drop{
+  border:1.5px dashed var(--rule-strong);border-radius:14px;background:var(--card);
+  padding:26px 18px;text-align:center;transition:.15s;
+}
+.drop.over{border-color:var(--ink);background:#fff}
+.drop p{margin:6px 0 0;color:var(--muted);font-size:13px}
+.card{background:var(--card);border:1px solid var(--rule);border-radius:14px;padding:16px;margin-top:16px;box-shadow:var(--shadow)}
+.field{margin:14px 0}
+.field label{display:flex;justify-content:space-between;align-items:baseline;font-size:13px;font-weight:600;margin-bottom:6px}
+.field label b{font-family:var(--mono);font-weight:600}
+.field label em{font-style:normal;color:var(--muted);font-weight:400;font-size:12px}
+input[type=range]{width:100%;accent-color:var(--ink)}
+input[type=text],select{width:100%;padding:9px 10px;border:1px solid var(--rule-strong);border-radius:9px;background:var(--card)}
+.hint{font-size:12px;color:var(--muted);margin:6px 0 0}
+#cropWrap{position:relative;margin-top:12px;touch-action:none;user-select:none;line-height:0}
+#cropWrap canvas{max-width:100%;border-radius:10px;display:block}
+#cropBox{position:absolute;border:2px solid var(--marker);box-shadow:0 0 0 9999px rgba(24,28,31,.42);pointer-events:none;display:none}
+.stats{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:10px}
+.stats b{color:var(--ink);font-weight:600}
+.projects{margin-top:26px}
+.proj{display:flex;align-items:center;gap:12px;padding:11px 12px;border:1px solid var(--rule);border-radius:11px;background:var(--card);margin-top:8px}
+.proj .t{flex:1;min-width:0}
+.proj .t b{display:block;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.proj .t small{color:var(--muted);font-family:var(--mono);font-size:11.5px}
+
+/* ---------- рабочий экран ---------- */
+.work{flex:1;display:flex;min-height:0}
+.canvasWrap{flex:1;position:relative;min-width:0;background:
+  repeating-conic-gradient(#e7e9e2 0% 25%, #eef0ea 0% 50%) 0 0/16px 16px}
+#chart{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+.tools{
+  position:absolute;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom));
+  display:flex;gap:6px;padding:6px;background:var(--card);
+  border:1px solid var(--rule);border-radius:13px;box-shadow:var(--shadow);
+}
+.tools .btn{padding:9px 12px}
+.badge{
+  position:absolute;top:10px;left:10px;background:var(--card);border:1px solid var(--rule);
+  border-radius:10px;padding:7px 10px;font-family:var(--mono);font-size:12px;box-shadow:var(--shadow);
+  display:flex;align-items:center;gap:8px;max-width:calc(100% - 20px)
+}
+.sw{width:16px;height:16px;border-radius:4px;border:1px solid rgba(0,0,0,.25);flex:none;
+  display:grid;place-items:center;font-size:10px;font-family:var(--mono)}
+
+/* панель ниток */
+.threads{
+  width:320px;flex:none;background:var(--card);border-left:1px solid var(--rule);
+  display:flex;flex-direction:column;min-height:0;
+}
+.threads h2{font-family:var(--display);font-size:13px;margin:0;padding:12px 14px;border-bottom:1px solid var(--rule);display:flex;align-items:center;gap:8px}
+.threads h2 .grow{flex:1}
+.tlist{overflow:auto;flex:1;-webkit-overflow-scrolling:touch}
+.th{display:flex;align-items:center;gap:10px;padding:9px 12px;border-bottom:1px solid var(--rule);cursor:pointer}
+.th:hover{background:#f7f8f4}
+.th.sel{background:#fff8e0;box-shadow:inset 3px 0 0 var(--marker)}
+.th.skip{opacity:.42}
+.th .meta{flex:1;min-width:0}
+.th .code{font-family:var(--mono);font-size:13px;font-weight:600}
+.th .name{font-size:11.5px;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.th .num{font-family:var(--mono);font-size:11.5px;color:var(--muted);text-align:right}
+.th .tbar{height:3px;background:var(--rule);border-radius:2px;margin-top:4px;overflow:hidden}
+.th .tbar>i{display:block;height:100%}
+.sheetHandle{display:none}
+.foot{padding:10px 12px;border-top:1px solid var(--rule);display:flex;gap:8px;flex-wrap:wrap}
+
+@media (max-width:860px){
+  .threads{
+    position:fixed;left:0;right:0;bottom:0;width:auto;height:62dvh;z-index:20;
+    border-left:0;border-top:1px solid var(--rule);border-radius:16px 16px 0 0;
+    box-shadow:0 -8px 30px -14px rgba(24,28,31,.5);
+    transform:translateY(100%);transition:transform .22s ease;padding-bottom:env(safe-area-inset-bottom);
+  }
+  .threads.open{transform:translateY(0)}
+  .sheetHandle{display:block;width:38px;height:4px;border-radius:2px;background:var(--rule-strong);margin:8px auto 2px}
+}
+.hidden{display:none!important}
+.sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
+label.btn{display:inline-block}
+.sr:focus-visible + label.btn{outline:2px solid var(--link);outline-offset:2px}
+.install{display:flex;align-items:center;gap:12px;margin-top:18px;padding:13px 14px;
+  background:var(--ink);color:#fff;border-radius:13px}
+.install .t{flex:1;min-width:0;font-size:13.5px;line-height:1.35}
+.install .t b{display:block;font-weight:600;margin-bottom:2px}
+.install .btn{background:var(--marker);border-color:var(--marker);color:#181c1f;font-weight:600}
+.updbar{position:fixed;left:12px;right:12px;bottom:calc(12px + env(safe-area-inset-bottom));z-index:70;
+  background:var(--ink);color:#fff;border-radius:12px;padding:11px 13px;display:flex;align-items:center;gap:10px;
+  font-size:13.5px;box-shadow:var(--shadow)}
+.updbar .btn{background:var(--marker);border-color:var(--marker);color:#181c1f;font-weight:600;padding:6px 11px}
+.toast{
+  position:fixed;left:50%;transform:translateX(-50%);bottom:calc(84px + env(safe-area-inset-bottom));
+  background:var(--ink);color:#fff;padding:9px 14px;border-radius:10px;font-size:13.5px;z-index:50;
+  opacity:0;pointer-events:none;transition:opacity .2s
+}
+.toast.show{opacity:1}
+.busy{position:fixed;inset:0;background:rgba(238,240,234,.86);display:grid;place-items:center;z-index:60;font-family:var(--mono);font-size:14px}
+</style>
+</head>
+<body>
+<div class="app">
+  <header class="top">
+    <div class="brand">Крестик <span id="projName"></span></div>
+    <div class="grow"></div>
+    <div id="progWrap" class="hidden" style="text-align:right">
+      <div class="pct"><span id="pctNum">0%</span> <small id="pctAbs"></small></div>
+      <div class="bar topbar"><i id="pctBar" style="width:0"></i></div>
+    </div>
+    <button class="btn ghost hidden" id="backBtn" title="К настройкам">✕</button>
+  </header>
+
+  <!-- ЭКРАН 1 -->
+  <section class="setup" id="setup">
+    <h1>Схема вышивки<br>из любой фотографии</h1>
+    <p class="lede">Загрузите картинку, выберите размер в крестиках — и отмечайте прогресс прямо на схеме,
+      палец за пальцем. Всё считается в браузере, фото никуда не уходит.</p>
+
+    <div class="drop" id="drop">
+      <input type="file" id="file" accept="image/*" class="sr">
+      <label class="btn primary" for="file">Выбрать фото</label>
+      <p>или перетащите файл сюда</p>
+      <p id="loadStatus" class="hint" style="min-height:1.2em"></p>
+    </div>
+
+    <div class="card hidden" id="params">
+      <div id="cropWrap"><canvas id="srcCv"></canvas><div id="cropBox"></div></div>
+      <p class="hint">Проведите пальцем по фото, чтобы обрезать. <button class="btn ghost" id="resetCrop" style="padding:2px 6px">Сбросить кадр</button></p>
+
+      <div class="field">
+        <label for="w">Ширина <b><span id="wv">100</span> крестиков</b></label>
+        <input type="range" id="w" min="30" max="250" step="1" value="100">
+      </div>
+      <div class="field">
+        <label for="c">Цветов ниток <b><span id="cv">30</span></b></label>
+        <input type="range" id="c" min="4" max="60" step="1" value="30">
+      </div>
+      <div class="field">
+        <label for="ct">Канва <em>крестиков на дюйм</em></label>
+        <select id="ct">
+          <option value="11">Aida 11 — крупная</option>
+          <option value="14" selected>Aida 14 — стандарт</option>
+          <option value="16">Aida 16</option>
+          <option value="18">Aida 18 — мелкая</option>
+        </select>
+      </div>
+      <div class="stats" id="setupStats"></div>
+      <div class="row" style="margin-top:14px">
+        <button class="btn primary" id="go">Построить схему</button>
+        <label class="btn" for="file">Другое фото</label>
+      </div>
+    </div>
+
+    <div class="install hidden" id="install">
+      <div class="t"><b>Поставьте на телефон</b><span id="installHint">Схема будет открываться с домашнего экрана и работать без интернета.</span></div>
+      <button class="btn" id="installBtn">Установить</button>
+    </div>
+
+    <div class="projects" id="projects"></div>
+  </section>
+
+  <!-- ЭКРАН 2 -->
+  <section class="work hidden" id="work">
+    <div class="canvasWrap">
+      <canvas id="chart"></canvas>
+      <div class="badge hidden" id="badge"></div>
+      <div class="tools">
+        <button class="btn on" id="mStitch" title="Отмечать крестики">✎ Шить</button>
+        <button class="btn" id="mPan" title="Двигать схему">✥</button>
+        <button class="btn" id="undo" title="Отменить">↶</button>
+        <button class="btn" id="fit" title="Вписать">⤢</button>
+        <button class="btn" id="openThreads">Нитки</button>
+      </div>
+    </div>
+
+    <aside class="threads" id="threads">
+      <div class="sheetHandle" id="handle"></div>
+      <h2><span class="grow">Нитки</span>
+        <button class="btn ghost" id="fade" style="font-size:12px">Гасить: сделанное</button>
+      </h2>
+      <div class="tlist" id="tlist"></div>
+      <div class="foot">
+        <button class="btn" id="save">Сохранить</button>
+        <button class="btn" id="export">Файл схемы</button>
+        <button class="btn ghost" id="clearSel">Снять выбор</button>
+        <button class="btn ghost" id="wake" title="Держать экран включённым во время вышивания">☀ Экран гаснет</button>
+      </div>
+    </aside>
+  </section>
+</div>
+<div class="toast" id="toast"></div>
+<div class="busy hidden" id="busy">считаю палитру…</div>
+<div class="updbar hidden" id="updbar"><span class="t">Вышла новая версия</span><button class="btn" id="updBtn">Обновить</button></div>
+
+<script>
+"use strict";
+/* ============================ палитра DMC ============================ */
+const DMC = "B5200:Snow White:FFFFFF|White:White:FCFBF8|Ecru:Ecru:F0EADA|150:Dusty Rose Ult VDk:AB0249|151:Dusty Rose Vry Lt:F0CED4|152:Shell Pink Med Lt:E2A099|153:Violet Very Light:E6CCD9|154:Grape Very Dark:572433|155:Blue Violet Med Dk:9891B6|156:Blue Violet Md Lt:A3AED1|157:Cornflower Blue Vy Lt:BBC3D9|158:Cornflower Blu Md V Dk:4C526E|159:Blue Gray Light:C7CAD7|160:Blue Gray Medium:999FB7|161:Blue Gray:7880A4|162:Blue Ultra Very Light:DBECF5|163:Celadon Green Med:4D8361|164:Forest Green Lt:C8E6BC|165:Moss Green Vy Lt:EFF4A4|166:Moss Green Md Lt:C0C840|167:Yellow Beige Vy Dk:A77C49|168:Pewter Very Light:D1D1D1|169:Pewter Light:848484|208:Lavender Very Dark:945B80|209:Lavender Dark:CE94BA|210:Lavender Medium:ECCFE1|211:Lavender Light:F3DAE4|221:Shell Pink Vy Dk:883E43|223:Shell Pink Light:CC847C|224:Shell Pink Very Light:EBB7AF|225:Shell Pink Ult Vy Lt:FFDED5|300:Mahogany Vy Dk:6F2F00|301:Mahogany Med:B35F2B|304:Red Medium:B71F33|307:Lemon:FDED54|309:Rose Deep:D62B5B|310:Black:000000|311:Wedgewood Ult VyDk:1C5066|312:Baby Blue Very Dark:35668B|315:Antique Mauve Md Dk:814952|316:Antique Mauve Medium:B7737F|317:Pewter Gray:6C6C6C|318:Steel Gray Light:ABABAB|319:Pistachio Grn Vy Dk:205F2E|320:Pistachio Green Med:69885A|321:Red:C72B3B|322:Baby Blue Dark:518BB1|326:Rose Very Dark:B33B4B|327:Violet Dark:633666|333:Blue Violet Very Dark:5C5478|334:Baby Blue Medium:739FC1|335:Rose:EE546E|336:Navy Blue:253B73|340:Blue Violet Medium:A29FC5|341:Blue Violet Light:B0C0DA|347:Salmon Very Dark:BF2D2D|349:Coral Dark:D21035|350:Coral Medium:E04848|351:Coral:E96A67|352:Coral Light:FD9C97|353:Peach:FED7CC|355:Terra Cotta Dark:984436|356:Terra Cotta Med:C2654C|367:Pistachio Green Dark:617A52|368:Pistachio Green Lt:A6C298|369:Pistachio Green Vy Lt:D7EDCC|370:Mustard Medium:B89D64|371:Mustard:BFA671|372:Mustard Light:CBB387|400:Mahogany Dark:8F430F|402:Mahogany Vy Lt:F7A777|407:Desert Sand Dark:C28E76|413:Pewter Gray Dark:565656|414:Steel Gray Dark:8C8C8C|415:Pearl Gray:D3D3D6|420:Hazelnut Brown Dk:A07042|422:Hazelnut Brown Lt:C69F7B|433:Brown Medium:7A451F|434:Brown Light:985E33|435:Brown Very Light:B87748|436:Tan:CB9051|437:Tan Light:E4BB8E|444:Lemon Dark:FFD600|445:Lemon Light:FFFB8B|451:Shell Gray Dark:B3978F|452:Shell Gray Med:C0B3B4|453:Shell Gray Light:D7CECC|469:Avocado Green:72843C|470:Avocado Green Lt:94AB4F|471:Avocado Green Vy Lt:AEBF79|472:Avocado Green Ult Lt:EEF0C0|498:Red Dark:A7132B|500:Blue Green Vy Dk:044D33|501:Blue Green Dark:396F52|502:Blue Green:5B9071|503:Blue Green Med:93BEA7|504:Blue Green Vy Lt:C4DECC|517:Wedgewood Dark:3E85A2|518:Wedgewood Light:4F93A7|519:Sky Blue:7EB1C8|520:Fern Green Dark:3D4A32|522:Fern Green:969E7E|523:Fern Green Lt:ABB197|524:Fern Green Vy Lt:C4CDAC|535:Ash Gray Very Light:555559|543:Beige Brown Ult Vy Lt:EBDCCC|550:Violet Very Dark:5C184E|552:Violet Medium:803A6B|553:Violet:96497E|554:Violet Light:DBB3CB|561:Jade Very Dark:2C6A45|562:Jade Medium:53976A|563:Jade Light:8FC098|564:Jade Very Light:A7CDAF|580:Moss Green Dark:889112|581:Moss Green:A7AE2B|597:Turquoise:5BA3B3|598:Turquoise Light:90C3CC|600:Cranberry Vy Dk:CD2F63|601:Cranberry Dark:D1286A|602:Cranberry Medium:E24874|603:Cranberry:FFA4BE|604:Cranberry Light:FFB0BE|605:Cranberry Very Light:FFC0CD|606:Orange Red Bright:FA3203|608:Burnt Orange Bright:FD5D35|610:Drab Brown Dk:796047|611:Drab Brown:8B6F4F|612:Drab Brown Light:AA8F6C|613:Drab Brown Vy Lt:CCB799|632:Desert Sand Ult Vy Dk:A26651|640:Beige Gray Vy Dk:A39E8D|642:Beige Gray Dark:B0AB9A|644:Beige Gray Medium:DDD8CB|645:Beaver Gray Vy Dk:6E655C|646:Beaver Gray Dark:877D73|647:Beaver Gray Med:B0A69C|648:Beaver Gray Light:BCB4AC|666:Bright Red:E31D42|676:Old Gold Light:E5CE97|677:Old Gold Vy Lt:F5E6BB|680:Old Gold Dark:BC8D0E|699:Green:056517|700:Green Bright:07731B|701:Green Light:3F8F29|702:Kelly Green:47A72F|703:Chartreuse:7BB547|704:Chartreuse Bright:9ECF34|712:Cream:FFFBEF|718:Plum:9C2462|720:Orange Spice Dark:E55C1F|721:Orange Spice Med:F27842|722:Orange Spice Light:F7976F|725:Topaz Med Lt:FFC840|726:Topaz Light:FDD755|727:Topaz Vy Lt:FFF1AF|728:Topaz:E4B468|729:Old Gold Medium:D0A53E|730:Olive Green Vy Dk:827B30|731:Olive Green Dk:8C853D|732:Olive Green:948C36|733:Olive Green Md:BCB478|734:Olive Green Lt:C7C077|738:Tan Very Light:ECCC9E|739:Tan Ult Vy Lt:F8E4C8|740:Tangerine:FF8B00|741:Tangerine Med:FFA32B|742:Tangerine Light:FFBF57|743:Yellow Med:FED376|744:Yellow Pale:FFE793|745:Yellow Lt Pale:FFF0C5|746:Off White:FCFCEE|747:Peacock Blue Vy Lt:E5FCFD|754:Peach Light:F7CBBF|758:Terra Cotta Vy Lt:EEAA9B|760:Salmon:F5ADAD|761:Salmon Light:FFC9C9|762:Pearl Gray Vy Lt:ECECEC|772:Yellow Green Vy Lt:E4ECD4|775:Baby Blue Very Light:D9EBF1|776:Pink Medium:FCB0B9|777:Raspberry Very Dark:913546|778:Antique Mauve Vy Lt:DFB3BB|779:Cocoa Dark:72564F|780:Topaz Ult Vy Dk:94631A|781:Topaz Vy Dk:A26D20|782:Topaz Dark:AE7720|783:Topaz Medium:CE9124|791:Cornflower Blue VyDk:464563|792:Cornflower Blue Dark:555B7B|793:Cornflower Blue Med:707DA2|794:Cornflower Blue Light:8F9CC1|796:Royal Blue Dark:11416D|797:Royal Blue:13477D|798:Delft Blue Dark:466A8E|799:Delft Blue Medium:748EB6|800:Delft Blue Pale:C0CCDE|801:Coffee Brown Dark:653919|803:Baby Blue Ult VyDk:26527E|806:Peacock Blue Dark:3D95A5|807:Peacock Blue:64ABBA|809:Delft Blue:94A8C6|813:Blue Light:A2C2D1|814:Garnet Dark:7B001B|815:Garnet Medium:87071F|816:Garnet:970B23|817:Coral Red Vy Dk:BB051F|818:Baby Pink:FFDFD9|819:Baby Pink Light:FFEEEB|820:Royal Blue Vy Dk:0E365C|822:Beige Gray Light:E7E2D3|823:Navy Blue Dark:112359|824:Blue Very Dark:396987|825:Blue Dark:4781A5|826:Blue Medium:6B9EBF|827:Blue Very Light:BDDDED|828:Sky Blue Vy Lt:C5E8ED|829:Golden Olive Vy Dk:7E643C|830:Golden Olive Dk:8D7246|831:Golden Olive Md:9B7F4F|832:Golden Olive:BD9B51|833:Golden Olive Lt:C8AB6C|834:Golden Olive Vy Lt:DBBE7F|838:Beige Brown Vy Dk:594937|839:Beige Brown Dk:675541|840:Beige Brown Med:9A7C5C|841:Beige Brown Lt:B69B7E|842:Beige Brown Vy Lt:DBCEB9|844:Beaver Brown Ult Dk:484848|869:Hazelnut Brown Vy Dk:835E39|890:Pistachio Grn Ult VDk:174923|891:Carnation Dark:FF5773|892:Carnation Medium:FF798C|893:Carnation Light:FC90A2|894:Carnation Very Light:FFB2BB|895:Hunter Green Vy Dk:1B5915|898:Coffee Brown Vy Dk:492A13|899:Rose Medium:F27688|900:Burnt Orange Dark:D15807|902:Garnet Very Dark:822637|904:Parrot Green Vy Dk:4E6927|905:Parrot Green Dark:628331|906:Parrot Green Medium:7FA635|907:Parrot Green Light:C7E666|909:Emerald Green Vy Dk:156F49|910:Emerald Green Dark:187E56|911:Emerald Green Med:1B8A65|912:Emerald Green Lt:1B9D6B|913:Nile Green Med:6DAB77|915:Plum Dark:820043|917:Plum Medium:9B1359|918:Red Copper Dark:82401D|919:Red Copper:A64510|920:Copper Med:AC5414|921:Copper:C66218|922:Copper Light:E27323|924:Gray Green Vy Dk:566A6A|926:Gray Green Med:98AEAE|927:Gray Green Light:BDCBCB|928:Gray Green Vy Lt:DDE3E3|930:Antique Blue Dark:455C71|931:Antique Blue Medium:6A859E|932:Antique Blue Light:A2B5C6|934:Black Avocado Green:313919|935:Avocado Green Dk:424D25|936:Avocado Green Vy Dk:4C592B|937:Avocado Green Med:627733|938:Coffee Brown Ult Dk:361F0E|939:Navy Blue Very Dark:132448|943:Aquamarine Med:3D9384|945:Tawny:FBD5BB|946:Burnt Orange Medium:EB6307|947:Burnt Orange:FF7B4D|948:Peach Very Light:FEE7DA|950:Desert Sand Light:EED3C4|951:Tawny Light:FFE2CF|954:Nile Green:AADEAF|956:Geranium:FF9191|957:Geranium Pale:FDB5B5|958:Sea Green Dark:3EB6A1|959:Sea Green Med:59C7B4|961:Dusty Rose Dk:CF7373|962:Dusty Rose Med:D88484|963:Dusty Rose Ult Vy Lt:FFD7D7|964:Sea Green Light:A9E2D8|966:Baby Green Med:B9D7C0|970:Pumpkin Light:F78B13|971:Pumpkin:F67F00|972:Canary Deep:FFB515|973:Canary Bright:FFE300|975:Golden Brown Dk:914F12|976:Golden Brown Med:C28142|977:Golden Brown Light:DC9C56|986:Forest Green Vy Dk:405230|987:Forest Green Dark:587136|988:Forest Green Medium:738B44|989:Forest Green:8DA675|991:Aquamarine Dk:2F5956|992:Aquamarine Light:6FAE9F|993:Aquamarine Vy Lt:90C0B4|995:Electric Blue Dark:2696B6|996:Electric Blue Medium:30C2D5|3011:Khaki Green Dark:898A58|3012:Khaki Green Med:A6A75D|3013:Khaki Green Light:B9B982|3021:Brown Gray Vy Dk:4F4B41|3022:Brown Gray Medium:8E9078|3023:Brown Gray Light:B1AA97|3024:Brown Gray Vy Lt:EBEAE7|3031:Mocha Brown Vy Dk:4B3C2A|3032:Mocha Brown Med:B3A48F|3033:Mocha Brown Vy Lt:E3D8CC|3041:Antique Violet Med:956F7C|3042:Antique Violet Lt:B79DA7|3045:Yellow Beige Dk:BC966A|3046:Yellow Beige Med:D8BC9A|3047:Yellow Beige Light:E7D6C1|3051:Green Gray Dark:5F6648|3052:Green Gray Med:889268|3053:Green Gray:9CA482|3064:Desert Sand:C48E70|3072:Beaver Gray Vy Lt:E6E8E8|3078:Golden Yellow Vy Lt:FDF9CD|3325:Baby Blue Light:B8D2E6|3326:Rose Light:FBADB4|3328:Salmon Dark:E36D6D|3340:Apricot Medium:FF836F|3341:Apricot:FCAB98|3345:Hunter Green Dark:3C4F2A|3346:Hunter Green:406A3A|3347:Yellow Green Med:71935C|3348:Yellow Green Lt:CCD9B1|3350:Dusty Rose Ult Dk:BC4365|3354:Dusty Rose Light:E4A6AC|3362:Pine Green Dk:5E6B47|3363:Pine Green Med:728256|3364:Pine Green:83975F|3371:Black Brown:1E1108|3607:Plum Light:C54989|3608:Plum Very Light:EA9CC4|3609:Plum Ultra Light:F4AED5|3685:Mauve Very Dark:881531|3687:Mauve:C96B70|3688:Mauve Medium:E7A9AC|3689:Mauve Light:FBBFC2|3705:Melon Dark:FF7992|3706:Melon Medium:FFADBC|3708:Melon Light:FFCCD0|3712:Salmon Medium:F18787|3713:Salmon Very Light:FFE2E2|3716:Dusty Rose Vy Lt:FFBDBD|3721:Shell Pink Dark:91444A|3722:Shell Pink Med:BC6C64|3726:Antique Mauve Dark:AB6772|3727:Antique Mauve Light:DBA9B2|3731:Dusty Rose Vy Dk:DA6783|3733:Dusty Rose:E8879B|3740:Antique Violet Dark:785762|3743:Antique Violet Vy Lt:D7CBD3|3746:Blue Violet Dark:776B98|3747:Blue Violet Vy Lt:DFDFEC|3750:Antique Blue Vy Dk:384C5E|3752:Antique Blue Vy Lt:C7D1DB|3753:Antique Blue Ult Vy Lt:DBE2E9|3755:Baby Blue:ACC6DC|3756:Baby Blue Ult Vy Lt:EEFCFC|3760:Wedgewood Med:458BA3|3761:Sky Blue Light:ACD8E2|3765:Peacock Blue Vy Dk:378496|3766:Peacock Blue Light:63ABBE|3768:Gray Green Dark:657F7F|3770:Tawny Vy Light:FFEEE3|3772:Desert Sand Vy Dk:AD7257|3773:Desert Sand Med:B67552|3774:Desert Sand Vy Lt:F3CEBB|3776:Mahogany Light:CF7939|3777:Terra Cotta Vy Dk:863022|3778:Terra Cotta Light:C0745D|3779:Rosewood Ult Vy Lt:F8B29C|3781:Mocha Brown Dk:6B5743|3782:Mocha Brown Lt:D2BCA6|3787:Brown Gray Dark:625D50|3790:Beige Gray Ult Dk:A78F7E|3799:Pewter Gray Vy Dk:424242|3801:Melon Very Dark:E74967|3802:Antique Mauve Vy Dk:714149|3803:Mauve Dark:AB3357|3804:Cyclamen Pink Dark:E02876|3805:Cyclamen Pink:F3478B|3806:Cyclamen Pink Light:FF8CAE|3807:Cornflower Blue:60678C|3808:Turquoise Ult Vy Dk:366970|3809:Turquoise Vy Dark:3F7C85|3810:Turquoise Dark:488E9A|3811:Turquoise Very Light:BCE3E6|3812:Sea Green Vy Dk:2F8C84|3813:Blue Green Lt:B2D4BD|3814:Aquamarine:508B7D|3815:Celadon Green Dk:447C68|3816:Celadon Green:65A58C|3817:Celadon Green Lt:90C0A8|3818:Emerald Grn Ult V Dk:115A3B|3819:Moss Green Lt:E0E8A3|3820:Straw Dark:DFB65F|3821:Straw:F3CE75|3822:Straw Light:F6DC98|3823:Yellow Ultra Pale:FFFDE3|3824:Apricot Light:FEA993|3825:Pumpkin Pale:FDBD96|3826:Golden Brown:AD7239|3827:Golden Brown Pale:F7BB77|3828:Hazelnut Brown:B78B61|3829:Old Gold Vy Dark:A98204|3830:Terra Cotta:B95444|3831:Raspberry Dark:B32F48|3832:Raspberry Medium:DB556E|3833:Raspberry Light:EA8699|3834:Grape Dark:72375D|3835:Grape Medium:946083|3836:Grape Light:BA91AA|3837:Lavender Ultra Dark:6C3A6E|3838:Lavender Blue Dark:5C7294|3839:Lavender Blue Med:7B8EAB|3840:Lavender Blue Light:B0C0DA|3841:Baby Blue Pale:CDDFED|3842:Wedgewood Vry Dk:32667C|3843:Electric Blue:14AAD0|3844:Bright Turquoise Dk:12AEBA|3845:Bright Turquoise Med:04C4CA|3846:Bright Turquoise Lt:06E3E6|3847:Teal Green Dark:347D75|3848:Teal Green Med:559392|3849:Teal Green Light:52B3A4|3850:Bright Green Dk:378477|3851:Bright Green Lt:49B3A1|3852:Straw Very Dark:CD9D37|3853:Autumn Gold Dark:F29746|3854:Autumn Gold Med:F2AF68|3855:Autumn Gold Light:FAD396|3856:Mahogany Ult Vy Lt:FFD3B5|3857:Rosewood Dark:68251A|3858:Rosewood Med:964A3F|3859:Rosewood Light:BA8B7C|3860:Cocoa:7D5D57|3861:Cocoa Light:A68881|3862:Mocha Beige Dark:8A6E4E|3863:Mocha Beige Med:A4835C|3864:Mocha Beige Light:CBB69C|3865:Winter White:F9F7F1|3866:Mocha Brn Ult Vy Lt:FAF6F0".split("|").map(s=>{
+  const [code,name,hex]=s.split(":");
+  return {code,name,r:parseInt(hex.slice(0,2),16),g:parseInt(hex.slice(2,4),16),b:parseInt(hex.slice(4,6),16)};
+});
+const SYMBOLS = [...("■□▲△▼▽●○◆◇★☆✚✖◐◑♦♣♠♥†‡§¶№±÷×∆∇∑√≈≠≡"+
+  "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789")];
+
+/* ============================ цвет ============================ */
+function rgb2lab(r,g,b){
+  const f=v=>{v/=255;return v<=0.04045?v/12.92:Math.pow((v+0.055)/1.055,2.4)};
+  const R=f(r),G=f(g),B=f(b);
+  let x=(0.4124564*R+0.3575761*G+0.1804375*B)/0.95047;
+  let y=(0.2126729*R+0.7151522*G+0.0721750*B);
+  let z=(0.0193339*R+0.1191920*G+0.9503041*B)/1.08883;
+  const e=216/24389,k=24389/27;
+  const t=v=>v>e?Math.cbrt(v):(k*v+16)/116;
+  x=t(x);y=t(y);z=t(z);
+  return [116*y-16,500*(x-y),200*(y-z)];
+}
+const DMC_LAB = DMC.map(d=>rgb2lab(d.r,d.g,d.b));
+const hex = c=>"#"+[c.r,c.g,c.b].map(v=>v.toString(16).padStart(2,"0")).join("");
+const isDark = c=>rgb2lab(c.r,c.g,c.b)[0]<55;
+
+/* ============================ квантование ============================ */
+function quantize(rgba,w,h,kWant){
+  let best=null;
+  for(const mult of [1.7,2.6,3.6]){
+    const res=quantizeOnce(rgba,w,h,kWant,Math.round(kWant*mult)+4);
+    if(!best||res.colors.length>best.colors.length) best=res;
+    if(res.colors.length>=kWant) return res;
+  }
+  return best;
+}
+function quantizeOnce(rgba,w,h,kWant,kRaw){
+  const n=w*h, lab=new Float32Array(n*3);
+  for(let i=0;i<n;i++){
+    const L=rgb2lab(rgba[i*4],rgba[i*4+1],rgba[i*4+2]);
+    lab[i*3]=L[0];lab[i*3+1]=L[1];lab[i*3+2]=L[2];
+  }
+  // берём с запасом: разные кластеры часто садятся на одну нитку
+  const k=Math.min(n, kRaw);
+  const cen=kmeanspp(lab,n,k);
+  let lbl=new Int32Array(n);
+  for(let it=0;it<26;it++){
+    let moved=0;
+    for(let i=0;i<n;i++){
+      const j=nearest(lab,i,cen,k);
+      if(j!==lbl[i]){lbl[i]=j;moved++;}
+    }
+    const sum=new Float64Array(k*3), cnt=new Int32Array(k);
+    for(let i=0;i<n;i++){const j=lbl[i];sum[j*3]+=lab[i*3];sum[j*3+1]+=lab[i*3+1];sum[j*3+2]+=lab[i*3+2];cnt[j]++;}
+    for(let j=0;j<k;j++) if(cnt[j]){cen[j*3]=sum[j*3]/cnt[j];cen[j*3+1]=sum[j*3+1]/cnt[j];cen[j*3+2]=sum[j*3+2]/cnt[j];}
+    if(!moved) break;
+  }
+  // привязка к DMC: несколько кластеров могут сесть на одну нитку — схлопываем
+  const remap=new Int32Array(k), seen=new Map(), palIdx=[];
+  for(let c=0;c<k;c++){
+    let best=0,bd=Infinity;
+    for(let p=0;p<DMC_LAB.length;p++){
+      const d=(DMC_LAB[p][0]-cen[c*3])**2+(DMC_LAB[p][1]-cen[c*3+1])**2+(DMC_LAB[p][2]-cen[c*3+2])**2;
+      if(d<bd){bd=d;best=p;}
+    }
+    if(!seen.has(best)){seen.set(best,palIdx.length);palIdx.push(best);}
+    remap[c]=seen.get(best);
+  }
+  const grid=new Int32Array(n);
+  for(let i=0;i<n;i++){
+    let best=0,bd=Infinity;
+    for(let c=0;c<k;c++){
+      const d=(cen[c*3]-lab[i*3])**2+(cen[c*3+1]-lab[i*3+1])**2+(cen[c*3+2]-lab[i*3+2])**2;
+      if(d<bd){bd=d;best=c;}
+    }
+    grid[i]=remap[best];
+  }
+  let used=palIdx.map(p=>({...DMC[p],lab:DMC_LAB[p]}));
+  mergeDown(grid,used,kWant);
+  return {grid,colors:used};
+}
+function kmeanspp(lab,n,k){
+  const cen=new Float32Array(k*3);
+  let i0=(Math.random()*n)|0;
+  cen[0]=lab[i0*3];cen[1]=lab[i0*3+1];cen[2]=lab[i0*3+2];
+  const d2=new Float64Array(n);
+  for(let i=0;i<n;i++) d2[i]=(lab[i*3]-cen[0])**2+(lab[i*3+1]-cen[1])**2+(lab[i*3+2]-cen[2])**2;
+  for(let c=1;c<k;c++){
+    let sum=0; for(let i=0;i<n;i++) sum+=d2[i];
+    let r=Math.random()*sum, pick=n-1;
+    for(let i=0;i<n;i++){r-=d2[i];if(r<=0){pick=i;break;}}
+    cen[c*3]=lab[pick*3];cen[c*3+1]=lab[pick*3+1];cen[c*3+2]=lab[pick*3+2];
+    for(let i=0;i<n;i++){
+      const d=(lab[i*3]-cen[c*3])**2+(lab[i*3+1]-cen[c*3+1])**2+(lab[i*3+2]-cen[c*3+2])**2;
+      if(d<d2[i]) d2[i]=d;
+    }
+  }
+  return cen;
+}
+function nearest(lab,i,cen,k){
+  let best=0,bd=Infinity;
+  for(let c=0;c<k;c++){
+    const d=(cen[c*3]-lab[i*3])**2+(cen[c*3+1]-lab[i*3+1])**2+(cen[c*3+2]-lab[i*3+2])**2;
+    if(d<bd){bd=d;best=c;}
+  }
+  return best;
+}
+/* сливаем лишние цвета: цена = сколько крестиков × насколько далеко ближайший.
+   так редкий, но контрастный цвет (глаза кота) выживает, а близкий дубль уходит */
+function mergeDown(grid,used,target){
+  const counts=()=>{const a=new Int32Array(used.length);for(let i=0;i<grid.length;i++)a[grid[i]]++;return a};
+  let cnt=counts();
+  while(used.length>target){
+    let victim=-1,winner=-1,bestCost=Infinity;
+    for(let i=0;i<used.length;i++){
+      let nd=Infinity,nj=-1;
+      for(let j=0;j<used.length;j++){
+        if(i===j) continue;
+        const d=(used[i].lab[0]-used[j].lab[0])**2+(used[i].lab[1]-used[j].lab[1])**2+(used[i].lab[2]-used[j].lab[2])**2;
+        if(d<nd){nd=d;nj=j;}
+      }
+      const cost=cnt[i]*nd;
+      if(cost<bestCost){bestCost=cost;victim=i;winner=nj;}
+    }
+    if(victim<0) break;
+    for(let i=0;i<grid.length;i++){
+      if(grid[i]===victim) grid[i]=winner;
+      if(grid[i]>victim) grid[i]--;
+    }
+    used.splice(victim,1);
+    cnt=counts();
+  }
+  // выкидываем пустые
+  cnt=counts();
+  for(let i=used.length-1;i>=0;i--){
+    if(cnt[i]===0){
+      for(let j=0;j<grid.length;j++) if(grid[j]>i) grid[j]--;
+      used.splice(i,1);
+    }
+  }
+}
+
+/* ============================ хранилище ============================ */
+const mem={};
+const store={
+  async get(k){
+    try{ if(window.storage){const r=await window.storage.get(k);return r?JSON.parse(r.value):null;} }catch(e){}
+    try{ const v=localStorage.getItem(k); return v?JSON.parse(v):null; }catch(e){}
+    return mem[k]??null;
+  },
+  async set(k,v){
+    const s=JSON.stringify(v);
+    try{ if(window.storage){await window.storage.set(k,s);return true;} }catch(e){}
+    try{ localStorage.setItem(k,s); return true; }catch(e){}
+    mem[k]=v; return false;
+  },
+  async del(k){
+    try{ if(window.storage){await window.storage.delete(k);return;} }catch(e){}
+    try{ localStorage.removeItem(k); }catch(e){}
+    delete mem[k];
+  }
+};
+const rle=arr=>{const o=[];let v=arr[0],n=0;for(let i=0;i<arr.length;i++){if(arr[i]===v)n++;else{o.push(v,n);v=arr[i];n=1;}}o.push(v,n);return o};
+const unrle=(o,Type)=>{let len=0;for(let i=1;i<o.length;i+=2)len+=o[i];const a=new Type(len);let p=0;
+  for(let i=0;i<o.length;i+=2){a.fill(o[i],p,p+o[i+1]);p+=o[i+1];}return a};
+
+/* ============================ состояние ============================ */
+const S={
+  id:null,name:"",w:0,h:0,count:14,
+  grid:null,colors:[],done:null,
+  view:{s:14,ox:0,oy:0}, mode:"stitch", sel:-1, fade:"done",
+  undo:[], img:null, crop:null
+};
+const $=s=>document.querySelector(s);
+const cv=$("#chart"), ctx=cv.getContext("2d");
+let toastT;
+function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),1800)}
+
+/* ============================ экран 1 ============================ */
+const srcCv=$("#srcCv"), srcCtx=srcCv.getContext("2d");
+$("#file").addEventListener("change",e=>{
+  const f=e.target.files&&e.target.files[0];
+  if(!f){ setStatus("Файл не пришёл от системы",true); return; }
+  loadImage(f);
+  e.target.value="";   // чтобы тот же файл можно было выбрать повторно
+});
+const drop=$("#drop");
+["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over")}));
+["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over")}));
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadImage(f)});
+addEventListener("paste",e=>{
+  const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith("image/"));
+  if(it){const f=it.getAsFile(); if(f){loadImage(f);toast("Картинка из буфера");}}
+});
+
+function setStatus(msg,bad){
+  const el=$("#loadStatus");
+  el.textContent=msg||"";
+  el.style.color=bad?"var(--warn)":"var(--muted)";
+}
+/* Разные пути декодирования: в песочнице артефакта blob-ссылки могут быть
+   запрещены, а с айфона нередко прилетает HEIC. Пробуем по очереди. */
+function decodeViaDataURL(file){
+  return new Promise((res,rej)=>{
+    const fr=new FileReader();
+    fr.onerror=()=>rej(new Error("файл не читается"));
+    fr.onload=()=>{
+      const im=new Image();
+      im.onload=()=>res(im);
+      im.onerror=()=>rej(new Error("браузер не понимает этот формат (HEIC?)"));
+      im.src=fr.result;
+    };
+    fr.readAsDataURL(file);
+  });
+}
+function decodeViaObjectURL(file){
+  return new Promise((res,rej)=>{
+    const url=URL.createObjectURL(file), im=new Image();
+    im.onload=()=>res(im);
+    im.onerror=()=>{URL.revokeObjectURL(url);rej(new Error("не удалось прочитать картинку"))};
+    im.src=url;
+  });
+}
+async function loadImage(file){
+  if(!file) return;
+  setStatus(`Открываю ${file.name||"файл"}…`);
+  let src=null, why=[];
+  if(window.createImageBitmap){
+    // сразу разворачивает по EXIF — важно для фото с телефона
+    try{ src=await createImageBitmap(file,{imageOrientation:"from-image"}); }
+    catch(e){ why.push("bitmap:"+e.message);
+      try{ src=await createImageBitmap(file); }catch(e2){ why.push("bitmap2:"+e2.message); } }
+  }
+  if(!src){ try{ src=await decodeViaDataURL(file); }catch(e){ why.push(e.message); } }
+  if(!src){ try{ src=await decodeViaObjectURL(file); }catch(e){ why.push(e.message); } }
+  if(!src){
+    setStatus("Не получилось открыть: "+(why[why.length-1]||"неизвестная ошибка")+
+              ". Попробуйте пересохранить фото как JPEG или PNG.",true);
+    return;
+  }
+  // Safari не умеет холсты больше ~16 Мп — уменьшаем заранее
+  const MAXPX=12e6;
+  if(src.width*src.height>MAXPX){
+    const k=Math.sqrt(MAXPX/(src.width*src.height));
+    const tmp=document.createElement("canvas");
+    tmp.width=Math.max(1,Math.round(src.width*k)); tmp.height=Math.max(1,Math.round(src.height*k));
+    try{
+      tmp.getContext("2d").drawImage(src,0,0,tmp.width,tmp.height);
+      src=tmp;
+    }catch(e){ setStatus("Фото слишком большое для браузера",true); return; }
+  }
+  try{
+    S.img=src;
+    const maxW=680, sc=Math.min(1,maxW/src.width);
+    srcCv.width=Math.round(src.width*sc); srcCv.height=Math.round(src.height*sc);
+    srcCtx.drawImage(src,0,0,srcCv.width,srcCv.height);
+    S.crop={x:0,y:0,w:src.width,h:src.height};
+    $("#cropBox").style.display="none";
+    $("#params").classList.remove("hidden");
+    $("#params").scrollIntoView({behavior:"smooth",block:"start"});
+    updateSetupStats();
+    setStatus(`${src.width}×${src.height} пикселей — готово к раскладке`);
+  }catch(e){
+    setStatus("Браузер не дал нарисовать картинку: "+e.message,true);
+  }
+}
+["w","c","ct"].forEach(id=>$("#"+id).addEventListener("input",updateSetupStats));
+function updateSetupStats(){
+  $("#wv").textContent=$("#w").value; $("#cv").textContent=$("#c").value;
+  if(!S.crop) return;
+  const w=+$("#w").value, h=Math.max(1,Math.round(w*S.crop.h/S.crop.w)), ct=+$("#ct").value;
+  const cm=v=>(v/ct*2.54).toFixed(1);
+  $("#setupStats").innerHTML=
+    `сетка <b>${w}×${h}</b>` +
+    `<span>крестиков <b>${(w*h).toLocaleString("ru")}</b></span>` +
+    `<span>размер <b>${cm(w)}×${cm(h)} см</b></span>`;
+  $("#go").disabled = w*h>90000;
+  if(w*h>90000) $("#setupStats").innerHTML+="<span style='color:var(--warn)'>слишком крупно</span>";
+}
+/* кадрирование мышью/пальцем */
+{
+  const wrap=$("#cropWrap"), box=$("#cropBox");
+  let start=null;
+  wrap.addEventListener("pointerdown",e=>{
+    if(!S.img) return;
+    const r=srcCv.getBoundingClientRect();
+    start={x:e.clientX-r.left,y:e.clientY-r.top,r};
+    wrap.setPointerCapture(e.pointerId);
+  });
+  wrap.addEventListener("pointermove",e=>{
+    if(!start) return;
+    const x=Math.max(0,Math.min(start.r.width,e.clientX-start.r.left));
+    const y=Math.max(0,Math.min(start.r.height,e.clientY-start.r.top));
+    const l=Math.min(start.x,x),t=Math.min(start.y,y),w=Math.abs(x-start.x),h=Math.abs(y-start.y);
+    Object.assign(box.style,{display:"block",left:l+"px",top:t+"px",width:w+"px",height:h+"px"});
+    box._r={l,t,w,h,vw:start.r.width,vh:start.r.height};
+  });
+  wrap.addEventListener("pointerup",()=>{
+    start=null;
+    const r=box._r;
+    if(!r||r.w<12||r.h<12){box.style.display="none";S.crop={x:0,y:0,w:S.img.width,h:S.img.height};updateSetupStats();return;}
+    const k=S.img.width/r.vw;
+    S.crop={x:Math.round(r.l*k),y:Math.round(r.t*k),w:Math.round(r.w*k),h:Math.round(r.h*k)};
+    updateSetupStats();
+  });
+  $("#resetCrop").onclick=()=>{
+    if(!S.img)return;
+    box.style.display="none"; box._r=null;
+    S.crop={x:0,y:0,w:S.img.width,h:S.img.height}; updateSetupStats();
+  };
+}
+
+$("#go").onclick=()=>{
+  $("#busy").classList.remove("hidden");
+  setTimeout(build,30);
+};
+function build(){
+  const w=+$("#w").value, h=Math.max(1,Math.round(w*S.crop.h/S.crop.w));
+  const tmp=document.createElement("canvas"); tmp.width=w; tmp.height=h;
+  const tc=tmp.getContext("2d",{willReadFrequently:true});
+  tc.imageSmoothingEnabled=true; tc.imageSmoothingQuality="high";
+  tc.drawImage(S.img,S.crop.x,S.crop.y,S.crop.w,S.crop.h,0,0,w,h);
+  const d=tc.getImageData(0,0,w,h).data;
+  const {grid,colors}=quantize(d,w,h,+$("#c").value);
+
+  colors.forEach(c=>{c.count=0;c.skip=false});
+  for(let i=0;i<grid.length;i++) colors[grid[i]].count++;
+  const order=colors.map((c,i)=>i).sort((a,b)=>colors[a].lab[0]-colors[b].lab[0]);
+  order.forEach((ci,rank)=>colors[ci].sym=SYMBOLS[rank%SYMBOLS.length]);
+
+  Object.assign(S,{
+    id:"p"+Date.now().toString(36), name:"Схема "+new Date().toLocaleDateString("ru",{day:"2-digit",month:"2-digit"}),
+    w,h,count:+$("#ct").value, grid, colors, done:new Uint8Array(w*h), sel:-1, undo:[]
+  });
+  $("#busy").classList.add("hidden");
+  openWork(); fitView(); saveProject(); refreshProjects();
+}
+
+/* ============================ экран 2 ============================ */
+function openWork(){
+  $("#setup").classList.add("hidden");
+  $("#work").classList.remove("hidden");
+  $("#progWrap").classList.remove("hidden");
+  $("#backBtn").classList.remove("hidden");
+  $("#projName").textContent="· "+S.name;
+  resize(); renderThreads(); updateProgress();
+}
+$("#backBtn").onclick=()=>{
+  saveProject();
+  $("#work").classList.add("hidden");
+  $("#setup").classList.remove("hidden");
+  $("#progWrap").classList.add("hidden");
+  $("#backBtn").classList.add("hidden");
+  $("#projName").textContent="";
+  refreshProjects();
+};
+
+function resize(){
+  const r=cv.parentElement.getBoundingClientRect(), dpr=devicePixelRatio||1;
+  cv.width=Math.round(r.width*dpr); cv.height=Math.round(r.height*dpr);
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  draw();
+}
+addEventListener("resize",()=>{if(!$("#work").classList.contains("hidden"))resize()});
+
+function fitView(){
+  const r=cv.parentElement.getBoundingClientRect();
+  const s=Math.min((r.width-24)/S.w,(r.height-90)/S.h);
+  S.view.s=Math.max(1,s);
+  S.view.ox=(r.width-S.w*S.view.s)/2;
+  S.view.oy=(r.height-S.h*S.view.s)/2-10;
+  draw();
+}
+$("#fit").onclick=fitView;
+
+function draw(){
+  if(!S.grid) return;
+  const r=cv.parentElement.getBoundingClientRect(), {s,ox,oy}=S.view;
+  ctx.clearRect(0,0,r.width,r.height);
+  const c0=Math.max(0,Math.floor(-ox/s)), c1=Math.min(S.w,Math.ceil((r.width-ox)/s));
+  const r0=Math.max(0,Math.floor(-oy/s)), r1=Math.min(S.h,Math.ceil((r.height-oy)/s));
+  if(c1<=c0||r1<=r0) return;
+
+  const showSym=s>=11;
+  ctx.font=`${Math.floor(s*.7)}px "JetBrains Mono", ui-monospace, monospace`;
+  ctx.textAlign="center"; ctx.textBaseline="middle";
+
+  for(let y=r0;y<r1;y++){
+    for(let x=c0;x<c1;x++){
+      const ci=S.grid[y*S.w+x], col=S.colors[ci];
+      const px=ox+x*s, py=oy+y*s;
+      if(col.skip){ ctx.fillStyle="#fbfbf8"; ctx.fillRect(px,py,s,s); continue; }
+      ctx.fillStyle=hex(col); ctx.fillRect(px,py,s,s);
+      if(showSym){ ctx.fillStyle=isDark(col)?"#fff":"#111"; ctx.fillText(col.sym,px+s/2,py+s/2+.5); }
+      const stitched=S.done[y*S.w+x]===1;
+      const dim = S.fade==="done" ? stitched : !stitched;
+      if(dim){ ctx.fillStyle="rgba(250,250,246,.72)"; ctx.fillRect(px,py,s,s); }
+      if(stitched && s>=6){
+        ctx.strokeStyle="rgba(255,167,15,.95)"; ctx.lineWidth=Math.max(1,s*.09);
+        ctx.beginPath();
+        ctx.moveTo(px+s*.22,py+s*.22); ctx.lineTo(px+s*.78,py+s*.78);
+        ctx.moveTo(px+s*.78,py+s*.22); ctx.lineTo(px+s*.22,py+s*.78);
+        ctx.stroke();
+      }
+      if(S.sel>=0 && ci!==S.sel){ ctx.fillStyle="rgba(252,252,249,.62)"; ctx.fillRect(px,py,s,s); }
+    }
+  }
+  if(s>=3.5){
+    const minor=s>=8;
+    ctx.lineWidth=1;
+    for(let x=c0;x<=c1;x++){
+      if(x%10!==0&&!minor) continue;
+      ctx.strokeStyle=x%10===0?"rgba(20,24,28,.8)":"rgba(20,24,28,.18)";
+      ctx.lineWidth=x%10===0?1.4:.6;
+      ctx.beginPath();ctx.moveTo(ox+x*s,oy+r0*s);ctx.lineTo(ox+x*s,oy+r1*s);ctx.stroke();
+    }
+    for(let y=r0;y<=r1;y++){
+      if(y%10!==0&&!minor) continue;
+      ctx.strokeStyle=y%10===0?"rgba(20,24,28,.8)":"rgba(20,24,28,.18)";
+      ctx.lineWidth=y%10===0?1.4:.6;
+      ctx.beginPath();ctx.moveTo(ox+c0*s,oy+y*s);ctx.lineTo(ox+c1*s,oy+y*s);ctx.stroke();
+    }
+  }
+}
+
+/* --- жесты --- */
+const pointers=new Map();
+let stroke=null, pinch=null, panFrom=null;
+cv.addEventListener("pointerdown",e=>{
+  cv.setPointerCapture(e.pointerId);
+  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pointers.size===2){
+    stroke=null;
+    const [a,b]=[...pointers.values()];
+    pinch={d:Math.hypot(a.x-b.x,a.y-b.y),s:S.view.s,
+           cx:(a.x+b.x)/2,cy:(a.y+b.y)/2,ox:S.view.ox,oy:S.view.oy};
+    return;
+  }
+  const p=cellAt(e);
+  if(S.mode==="stitch"&&p){
+    const i=p.y*S.w+p.x;
+    if(S.colors[S.grid[i]].skip) return;
+    stroke={val:S.done[i]?0:1, cells:new Set(), snapshot:S.done.slice()};
+    paint(p);
+  }else{
+    panFrom={x:e.clientX,y:e.clientY,ox:S.view.ox,oy:S.view.oy};
+  }
+});
+cv.addEventListener("pointermove",e=>{
+  if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(pinch&&pointers.size===2){
+    const [a,b]=[...pointers.values()];
+    const d=Math.hypot(a.x-b.x,a.y-b.y);
+    const r=cv.getBoundingClientRect();
+    const ns=Math.max(1.2,Math.min(70,pinch.s*d/pinch.d));
+    const k=ns/pinch.s;
+    S.view.s=ns;
+    S.view.ox=(pinch.cx-r.left)-((pinch.cx-r.left)-pinch.ox)*k;
+    S.view.oy=(pinch.cy-r.top)-((pinch.cy-r.top)-pinch.oy)*k;
+    draw(); return;
+  }
+  if(stroke){ const p=cellAt(e); if(p) paint(p); return; }
+  if(panFrom){
+    S.view.ox=panFrom.ox+(e.clientX-panFrom.x);
+    S.view.oy=panFrom.oy+(e.clientY-panFrom.y);
+    draw();
+  }
+});
+["pointerup","pointercancel"].forEach(ev=>cv.addEventListener(ev,e=>{
+  pointers.delete(e.pointerId);
+  if(pointers.size<2) pinch=null;
+  if(stroke){
+    if(stroke.cells.size){ S.undo.push(stroke.snapshot); if(S.undo.length>40)S.undo.shift(); }
+    stroke=null; updateProgress(); renderThreads(); queueSave();
+  }
+  panFrom=null;
+}));
+cv.addEventListener("wheel",e=>{
+  e.preventDefault();
+  const r=cv.getBoundingClientRect(), k=Math.exp(-e.deltaY*0.0015);
+  const ns=Math.max(1.2,Math.min(70,S.view.s*k)), f=ns/S.view.s;
+  S.view.ox=(e.clientX-r.left)-((e.clientX-r.left)-S.view.ox)*f;
+  S.view.oy=(e.clientY-r.top)-((e.clientY-r.top)-S.view.oy)*f;
+  S.view.s=ns; draw();
+},{passive:false});
+
+function cellAt(e){
+  const r=cv.getBoundingClientRect();
+  const x=Math.floor((e.clientX-r.left-S.view.ox)/S.view.s);
+  const y=Math.floor((e.clientY-r.top-S.view.oy)/S.view.s);
+  return (x>=0&&y>=0&&x<S.w&&y<S.h)?{x,y}:null;
+}
+function paint(p){
+  const i=p.y*S.w+p.x;
+  if(stroke.cells.has(i)) return;
+  if(S.colors[S.grid[i]].skip) return;
+  if(S.sel>=0 && S.grid[i]!==S.sel) return;   // выбран цвет — красим только его
+  stroke.cells.add(i); S.done[i]=stroke.val; draw();
+}
+$("#undo").onclick=()=>{
+  const prev=S.undo.pop();
+  if(!prev) return toast("Отменять нечего");
+  S.done=prev; draw(); updateProgress(); renderThreads(); queueSave();
+};
+$("#mStitch").onclick=()=>{S.mode="stitch";$("#mStitch").classList.add("on");$("#mPan").classList.remove("on")};
+$("#mPan").onclick=()=>{S.mode="pan";$("#mPan").classList.add("on");$("#mStitch").classList.remove("on")};
+$("#fade").onclick=()=>{
+  S.fade=S.fade==="done"?"todo":"done";
+  $("#fade").textContent="Гасить: "+(S.fade==="done"?"сделанное":"оставшееся");
+  draw();
+};
+
+/* --- панель ниток --- */
+const sheet=$("#threads");
+$("#openThreads").onclick=()=>sheet.classList.toggle("open");
+$("#handle").onclick=()=>sheet.classList.remove("open");
+$("#clearSel").onclick=()=>{S.sel=-1;renderThreads();draw();$("#badge").classList.add("hidden")};
+
+function doneOf(ci){let n=0;for(let i=0;i<S.grid.length;i++) if(S.grid[i]===ci&&S.done[i])n++;return n}
+function renderThreads(){
+  const list=$("#tlist"); list.innerHTML="";
+  const idx=S.colors.map((c,i)=>i).sort((a,b)=>S.colors[b].count-S.colors[a].count);
+  for(const i of idx){
+    const c=S.colors[i], d=doneOf(i), pc=c.count?Math.round(d/c.count*100):0;
+    const el=document.createElement("div");
+    el.className="th"+(S.sel===i?" sel":"")+(c.skip?" skip":"");
+    el.innerHTML=`
+      <div class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${c.sym}</div>
+      <div class="meta">
+        <div class="code">DMC ${c.code}</div>
+        <div class="name">${c.name}</div>
+        <div class="tbar"><i style="width:${pc}%;background:${hex(c)}"></i></div>
+      </div>
+      <div class="num">${d}/${c.count}<br>${pc}%</div>
+      <button class="btn ghost" data-skip="${i}" title="Не вышивать этот цвет" style="padding:4px 6px">${c.skip?"○":"◉"}</button>
+      <button class="btn ghost" data-all="${i}" title="Отметить весь цвет" style="padding:4px 6px">✓</button>`;
+    el.onclick=ev=>{
+      if(ev.target.dataset.skip!==undefined){
+        c.skip=!c.skip;
+        if(c.skip) for(let j=0;j<S.grid.length;j++) if(S.grid[j]===i) S.done[j]=0;
+        renderThreads(); updateProgress(); draw(); queueSave(); return;
+      }
+      if(ev.target.dataset.all!==undefined){
+        const full=d===c.count;
+        S.undo.push(S.done.slice());
+        for(let j=0;j<S.grid.length;j++) if(S.grid[j]===i) S.done[j]=full?0:1;
+        renderThreads(); updateProgress(); draw(); queueSave(); return;
+      }
+      S.sel = S.sel===i?-1:i;
+      renderThreads(); draw();
+      const b=$("#badge");
+      if(S.sel>=0){
+        b.classList.remove("hidden");
+        b.innerHTML=`<span class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${c.sym}</span> DMC ${c.code} · осталось ${c.count-d}`;
+      } else b.classList.add("hidden");
+      if(innerWidth<860) sheet.classList.remove("open");
+    };
+    list.appendChild(el);
+  }
+}
+function updateProgress(){
+  let total=0,d=0;
+  for(let i=0;i<S.grid.length;i++){
+    if(S.colors[S.grid[i]].skip) continue;
+    total++; if(S.done[i]) d++;
+  }
+  const pc=total?Math.round(d/total*100):0;
+  $("#pctNum").textContent=pc+"%";
+  $("#pctAbs").textContent=`${d.toLocaleString("ru")}/${total.toLocaleString("ru")}`;
+  $("#pctBar").style.width=pc+"%";
+}
+
+/* ============================ сохранение ============================ */
+let saveT;
+function queueSave(){clearTimeout(saveT);saveT=setTimeout(saveProject,700)}
+$("#save").onclick=()=>{saveProject();toast("Сохранено")};
+function pack(){
+  return {v:1,id:S.id,name:S.name,w:S.w,h:S.h,count:S.count,
+    colors:S.colors.map(c=>({code:c.code,name:c.name,r:c.r,g:c.g,b:c.b,sym:c.sym,count:c.count,skip:!!c.skip})),
+    grid:rle(S.grid), done:rle(S.done), at:Date.now()};
+}
+async function saveProject(){
+  if(!S.id) return;
+  await store.set("stitch:"+S.id,pack());
+  const list=(await store.get("stitch:index"))||[];
+  const meta={id:S.id,name:S.name,w:S.w,h:S.h,at:Date.now()};
+  const k=list.findIndex(p=>p.id===S.id);
+  if(k>=0) list[k]=meta; else list.unshift(meta);
+  await store.set("stitch:index",list.slice(0,30));
+}
+function unpack(p){
+  Object.assign(S,{
+    id:p.id,name:p.name,w:p.w,h:p.h,count:p.count,
+    grid:unrle(p.grid,Int32Array), done:unrle(p.done,Uint8Array),
+    colors:p.colors.map(c=>({...c,lab:rgb2lab(c.r,c.g,c.b)})),
+    sel:-1, undo:[]
+  });
+}
+async function refreshProjects(){
+  const list=(await store.get("stitch:index"))||[];
+  const box=$("#projects");
+  if(!list.length){box.innerHTML="";return}
+  box.innerHTML=`<h2 style="font-family:var(--display);font-size:13px;margin:0 0 8px">Мои схемы</h2>`;
+  for(const p of list){
+    const el=document.createElement("div"); el.className="proj";
+    el.innerHTML=`<div class="t"><b>${p.name}</b><small>${p.w}×${p.h} · ${new Date(p.at).toLocaleDateString("ru")}</small></div>
+      <button class="btn" data-open="${p.id}">Открыть</button>
+      <button class="btn ghost" data-del="${p.id}">Удалить</button>`;
+    el.onclick=async ev=>{
+      if(ev.target.dataset.open){
+        const d=await store.get("stitch:"+ev.target.dataset.open);
+        if(!d) return toast("Схема не найдена");
+        unpack(d); openWork(); fitView();
+      }
+      if(ev.target.dataset.del){
+        await store.del("stitch:"+ev.target.dataset.del);
+        const l=((await store.get("stitch:index"))||[]).filter(x=>x.id!==ev.target.dataset.del);
+        await store.set("stitch:index",l); refreshProjects();
+      }
+    };
+    box.appendChild(el);
+  }
+}
+$("#export").onclick=()=>{
+  const blob=new Blob([JSON.stringify(pack())],{type:"application/json"});
+  const a=document.createElement("a");
+  a.href=URL.createObjectURL(blob); a.download=(S.name||"схема").replace(/\s+/g,"_")+".stitch.json";
+  a.click(); URL.revokeObjectURL(a.href);
+  toast("Файл схемы скачан");
+};
+addEventListener("beforeunload",()=>{if(S.id)saveProject()});
+refreshProjects();
+updateSetupStats();
+
+/* ============================ PWA ============================ */
+// просим браузер не вычищать сохранённые схемы при нехватке места
+if(navigator.storage&&navigator.storage.persist) navigator.storage.persist().catch(()=>{});
+
+if("serviceWorker" in navigator){
+  addEventListener("load",()=>{
+    navigator.serviceWorker.register("sw.js").then(reg=>{
+      reg.addEventListener("updatefound",()=>{
+        const nw=reg.installing;
+        if(!nw) return;
+        nw.addEventListener("statechange",()=>{
+          if(nw.state==="installed"&&navigator.serviceWorker.controller){
+            $("#updbar").classList.remove("hidden");
+            $("#updBtn").onclick=()=>{ nw.postMessage("skip-waiting"); };
+          }
+        });
+      });
+    }).catch(()=>{});
+    let reloaded=false;
+    navigator.serviceWorker.addEventListener("controllerchange",()=>{
+      if(reloaded) return; reloaded=true; location.reload();
+    });
+  });
+}
+
+/* установка на домашний экран */
+let deferredPrompt=null;
+const standalone = matchMedia("(display-mode: standalone)").matches || navigator.standalone;
+addEventListener("beforeinstallprompt",e=>{
+  e.preventDefault(); deferredPrompt=e;
+  if(!standalone) $("#install").classList.remove("hidden");
+});
+$("#installBtn").onclick=async()=>{
+  if(!deferredPrompt) return;
+  deferredPrompt.prompt();
+  const {outcome}=await deferredPrompt.userChoice;
+  deferredPrompt=null;
+  if(outcome==="accepted") $("#install").classList.add("hidden");
+};
+addEventListener("appinstalled",()=>$("#install").classList.add("hidden"));
+// iOS не умеет beforeinstallprompt — показываем подсказку
+{
+  const iOS=/iPad|iPhone|iPod/.test(navigator.userAgent)||(navigator.platform==="MacIntel"&&navigator.maxTouchPoints>1);
+  if(iOS&&!standalone){
+    $("#install").classList.remove("hidden");
+    $("#installBtn").classList.add("hidden");
+    $("#installHint").textContent='Нажмите «Поделиться» в Safari и выберите «На экран «Домой»».';
+  }
+}
+
+/* экран не должен гаснуть, пока вы вышиваете */
+let wakeLock=null;
+async function toggleWake(){
+  const btn=$("#wake");
+  if(wakeLock){ try{await wakeLock.release()}catch(e){} wakeLock=null; btn.textContent="☀ Экран гаснет"; btn.classList.remove("on"); return; }
+  if(!("wakeLock" in navigator)) return toast("Браузер не умеет держать экран");
+  try{
+    wakeLock=await navigator.wakeLock.request("screen");
+    wakeLock.addEventListener("release",()=>{wakeLock=null;$("#wake").textContent="☀ Экран гаснет";$("#wake").classList.remove("on")});
+    btn.textContent="☀ Экран не гаснет"; btn.classList.add("on");
+  }catch(e){ toast("Не вышло удержать экран"); }
+}
+$("#wake").onclick=toggleWake;
+document.addEventListener("visibilitychange",async()=>{
+  if(document.visibilityState==="visible"&&$("#wake").classList.contains("on")&&!wakeLock){
+    try{ wakeLock=await navigator.wakeLock.request("screen"); }catch(e){}
+  }
+});
+</script>
+</body>
+</html>

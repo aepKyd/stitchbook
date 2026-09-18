@@ -1,0 +1,26 @@
+# Разворот на VPS за Traefik. Сеть traefik должна уже существовать:
+#   docker network create traefik
+services:
+  stitchbook:
+    build: .
+    image: stitchbook:1
+    restart: unless-stopped
+    networks: [traefik]
+    labels:
+      - traefik.enable=true
+      - traefik.docker.network=traefik
+      # ЗАМЕНИТЕ домен на свой
+      - traefik.http.routers.stitchbook.rule=Host(`stitch.example.com`)
+      - traefik.http.routers.stitchbook.entrypoints=websecure
+      - traefik.http.routers.stitchbook.tls=true
+      - traefik.http.routers.stitchbook.tls.certresolver=letsencrypt
+      - traefik.http.services.stitchbook.loadbalancer.server.port=80
+      # service worker живёт только на HTTPS, поэтому http -> https
+      - traefik.http.routers.stitchbook-http.rule=Host(`stitch.example.com`)
+      - traefik.http.routers.stitchbook-http.entrypoints=web
+      - traefik.http.routers.stitchbook-http.middlewares=stitchbook-https
+      - traefik.http.middlewares.stitchbook-https.redirectscheme.scheme=https
+
+networks:
+  traefik:
+    external: true
