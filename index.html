@@ -80,7 +80,9 @@ h1{font-family:var(--display);font-weight:700;font-size:clamp(21px,5.4vw,31px);l
 input[type=range]{width:100%;accent-color:var(--ink)}
 input[type=text],select{width:100%;padding:9px 10px;border:1px solid var(--rule-strong);border-radius:9px;background:var(--card)}
 .hint{font-size:12px;color:var(--muted);margin:6px 0 0}
-#cropWrap{position:relative;margin-top:12px;touch-action:none;user-select:none;line-height:0}
+#cropWrap{position:relative;margin-top:10px;user-select:none;line-height:0;touch-action:auto}
+#cropWrap.cropping{touch-action:none}
+#cropWrap.cropping canvas{outline:2px solid var(--marker);outline-offset:2px}
 #cropWrap canvas{max-width:100%;border-radius:10px;display:block}
 #cropBox{position:absolute;border:2px solid var(--marker);box-shadow:0 0 0 9999px rgba(24,28,31,.42);pointer-events:none;display:none}
 .stats{display:flex;gap:18px;flex-wrap:wrap;font-family:var(--mono);font-size:12.5px;color:var(--muted);margin-top:10px}
@@ -129,6 +131,8 @@ input[type=text],select{width:100%;padding:9px 10px;border:1px solid var(--rule-
 .th .tbar{height:3px;background:var(--rule);border-radius:2px;margin-top:4px;overflow:hidden}
 .th .tbar>i{display:block;height:100%}
 .sheetHandle{display:none}
+.sheetBackdrop{display:none}
+#closeThreads{display:none}
 .foot{padding:10px 12px;border-top:1px solid var(--rule);display:flex;gap:8px;flex-wrap:wrap}
 
 @media (max-width:860px){
@@ -139,7 +143,10 @@ input[type=text],select{width:100%;padding:9px 10px;border:1px solid var(--rule-
     transform:translateY(100%);transition:transform .22s ease;padding-bottom:env(safe-area-inset-bottom);
   }
   .threads.open{transform:translateY(0)}
-  .sheetHandle{display:block;width:38px;height:4px;border-radius:2px;background:var(--rule-strong);margin:8px auto 2px}
+  .sheetHandle{display:grid;place-items:center;height:26px;touch-action:none;cursor:grab}
+  .sheetHandle::before{content:"";display:block;width:44px;height:5px;border-radius:3px;background:var(--rule-strong)}
+  .sheetBackdrop{display:block;position:fixed;inset:0;z-index:19;background:rgba(24,28,31,.34)}
+  #closeThreads{display:inline-block;font-size:15px;line-height:1;padding:5px 9px}
 }
 .hidden{display:none!important}
 .sr{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
@@ -189,8 +196,12 @@ label.btn{display:inline-block}
     </div>
 
     <div class="card hidden" id="params">
+      <div class="row">
+        <button class="btn" id="cropMode" aria-pressed="false">✂ Обрезать</button>
+        <button class="btn ghost" id="resetCrop">Сбросить кадр</button>
+      </div>
       <div id="cropWrap"><canvas id="srcCv"></canvas><div id="cropBox"></div></div>
-      <p class="hint">Проведите пальцем по фото, чтобы обрезать. <button class="btn ghost" id="resetCrop" style="padding:2px 6px">Сбросить кадр</button></p>
+      <p class="hint" id="cropHint"></p>
 
       <div class="field">
         <label for="w">Ширина <b><span id="wv">100</span> крестиков</b></label>
@@ -238,10 +249,13 @@ label.btn{display:inline-block}
       </div>
     </div>
 
+    <div class="sheetBackdrop hidden" id="sheetBackdrop"></div>
+
     <aside class="threads" id="threads">
       <div class="sheetHandle" id="handle"></div>
       <h2><span class="grow">Нитки</span>
         <button class="btn ghost" id="fade" style="font-size:12px">Гасить: сделанное</button>
+        <button class="btn ghost" id="closeThreads" title="Закрыть нитки" aria-label="Закрыть нитки">✕</button>
       </h2>
       <div class="tlist" id="tlist"></div>
       <div class="foot">
@@ -515,7 +529,9 @@ async function loadImage(file){
     srcCtx.drawImage(src,0,0,srcCv.width,srcCv.height);
     S.crop={x:0,y:0,w:src.width,h:src.height};
     $("#cropBox").style.display="none";
+    $("#cropBox")._r=null;
     $("#params").classList.remove("hidden");
+    setCropMode(false);
     $("#params").scrollIntoView({behavior:"smooth",block:"start"});
     updateSetupStats();
     setStatus(`${src.width}×${src.height} пикселей — готово к раскладке`);
@@ -536,38 +552,54 @@ function updateSetupStats(){
   $("#go").disabled = w*h>90000;
   if(w*h>90000) $("#setupStats").innerHTML+="<span style='color:var(--warn)'>слишком крупно</span>";
 }
-/* кадрирование мышью/пальцем */
-{
-  const wrap=$("#cropWrap"), box=$("#cropBox");
-  let start=null;
-  wrap.addEventListener("pointerdown",e=>{
-    if(!S.img) return;
-    const r=srcCv.getBoundingClientRect();
-    start={x:e.clientX-r.left,y:e.clientY-r.top,r};
-    wrap.setPointerCapture(e.pointerId);
-  });
-  wrap.addEventListener("pointermove",e=>{
-    if(!start) return;
-    const x=Math.max(0,Math.min(start.r.width,e.clientX-start.r.left));
-    const y=Math.max(0,Math.min(start.r.height,e.clientY-start.r.top));
-    const l=Math.min(start.x,x),t=Math.min(start.y,y),w=Math.abs(x-start.x),h=Math.abs(y-start.y);
-    Object.assign(box.style,{display:"block",left:l+"px",top:t+"px",width:w+"px",height:h+"px"});
-    box._r={l,t,w,h,vw:start.r.width,vh:start.r.height};
-  });
-  wrap.addEventListener("pointerup",()=>{
-    start=null;
-    const r=box._r;
-    if(!r||r.w<12||r.h<12){box.style.display="none";S.crop={x:0,y:0,w:S.img.width,h:S.img.height};updateSetupStats();return;}
-    const k=S.img.width/r.vw;
-    S.crop={x:Math.round(r.l*k),y:Math.round(r.t*k),w:Math.round(r.w*k),h:Math.round(r.h*k)};
-    updateSetupStats();
-  });
-  $("#resetCrop").onclick=()=>{
-    if(!S.img)return;
-    box.style.display="none"; box._r=null;
-    S.crop={x:0,y:0,w:S.img.width,h:S.img.height}; updateSetupStats();
-  };
+/* Кадрирование включается кнопкой: иначе на телефоне свайп по фото уходил
+   в выделение рамки и прокрутить форму было нечем. */
+const cropWrapEl=$("#cropWrap"), cropBoxEl=$("#cropBox");
+let cropStart=null, cropping=false;
+function setCropMode(on){
+  cropping=!!on&&!!S.img;
+  cropStart=null;
+  cropWrapEl.classList.toggle("cropping",cropping);
+  $("#cropMode").classList.toggle("on",cropping);
+  $("#cropMode").setAttribute("aria-pressed",String(cropping));
+  $("#cropHint").textContent = cropping
+    ? "Проведите пальцем по фото, чтобы выделить область."
+    : "Свайп по фото листает страницу. Нажмите «Обрезать», чтобы взять часть фото.";
 }
+function resetCrop(){
+  if(!S.img) return;
+  cropBoxEl.style.display="none"; cropBoxEl._r=null;
+  S.crop={x:0,y:0,w:S.img.width,h:S.img.height};
+  updateSetupStats();
+}
+$("#cropMode").onclick=()=>{ if(S.img) setCropMode(!cropping); };
+$("#resetCrop").onclick=()=>{ resetCrop(); setCropMode(false); };
+cropWrapEl.addEventListener("pointerdown",e=>{
+  if(!cropping||!S.img) return;
+  const r=srcCv.getBoundingClientRect();
+  cropStart={x:e.clientX-r.left,y:e.clientY-r.top,r};
+  cropWrapEl.setPointerCapture(e.pointerId);
+});
+cropWrapEl.addEventListener("pointermove",e=>{
+  if(!cropStart) return;
+  const x=Math.max(0,Math.min(cropStart.r.width,e.clientX-cropStart.r.left));
+  const y=Math.max(0,Math.min(cropStart.r.height,e.clientY-cropStart.r.top));
+  const l=Math.min(cropStart.x,x),t=Math.min(cropStart.y,y),w=Math.abs(x-cropStart.x),h=Math.abs(y-cropStart.y);
+  Object.assign(cropBoxEl.style,{display:"block",left:l+"px",top:t+"px",width:w+"px",height:h+"px"});
+  cropBoxEl._r={l,t,w,h,vw:cropStart.r.width,vh:cropStart.r.height};
+});
+["pointerup","pointercancel"].forEach(ev=>cropWrapEl.addEventListener(ev,()=>{
+  if(!cropStart) return;
+  cropStart=null;
+  const r=cropBoxEl._r;
+  if(!r||r.w<12||r.h<12){ resetCrop(); return; }
+  const k=S.img.width/r.vw;
+  S.crop={x:Math.round(r.l*k),y:Math.round(r.t*k),w:Math.round(r.w*k),h:Math.round(r.h*k)};
+  updateSetupStats();
+  setCropMode(false);   // область выбрана — возвращаем странице прокрутку
+  $("#cropHint").textContent=`Кадр ${S.crop.w}×${S.crop.h} px. «Обрезать» — выбрать заново.`;
+}));
+setCropMode(false);
 
 $("#go").onclick=()=>{
   $("#busy").classList.remove("hidden");
@@ -593,6 +625,17 @@ function build(){
   });
   $("#busy").classList.add("hidden");
   openWork(); fitView(); saveProject(); refreshProjects();
+  resetSetupForm();
+}
+/* схема построена — форма настроек больше не нужна, фото освобождаем */
+function resetSetupForm(){
+  S.img=null; S.crop=null;
+  setCropMode(false);
+  cropBoxEl.style.display="none"; cropBoxEl._r=null;
+  $("#params").classList.add("hidden");
+  srcCv.width=srcCv.height=0;
+  setStatus("");
+  $("#setup").scrollTop=0;
 }
 
 /* ============================ экран 2 ============================ */
@@ -606,6 +649,7 @@ function openWork(){
 }
 $("#backBtn").onclick=()=>{
   saveProject();
+  setSheet(false);
   $("#work").classList.add("hidden");
   $("#setup").classList.remove("hidden");
   $("#progWrap").classList.add("hidden");
@@ -770,9 +814,31 @@ $("#fade").onclick=()=>{
 };
 
 /* --- панель ниток --- */
-const sheet=$("#threads");
-$("#openThreads").onclick=()=>sheet.classList.toggle("open");
-$("#handle").onclick=()=>sheet.classList.remove("open");
+const sheet=$("#threads"), sheetBackdrop=$("#sheetBackdrop");
+function setSheet(open){
+  sheet.style.transform="";
+  sheet.classList.toggle("open",open);
+  sheetBackdrop.classList.toggle("hidden",!open);
+}
+$("#openThreads").onclick=()=>setSheet(!sheet.classList.contains("open"));
+$("#closeThreads").onclick=()=>setSheet(false);
+sheetBackdrop.onclick=()=>setSheet(false);
+/* Ручка: тап или свайп вниз. Кнопка «Нитки» лежит под шторкой,
+   поэтому закрыть панель надо чем-то, что она не перекрывает. */
+{
+  const h=$("#handle");
+  let y0=null;
+  h.addEventListener("pointerdown",e=>{y0=e.clientY;h.setPointerCapture(e.pointerId)});
+  h.addEventListener("pointermove",e=>{
+    if(y0===null) return;
+    sheet.style.transform=`translateY(${Math.max(0,e.clientY-y0)}px)`;
+  });
+  ["pointerup","pointercancel"].forEach(ev=>h.addEventListener(ev,e=>{
+    if(y0===null) return;
+    const dy=e.clientY-y0; y0=null;
+    if(dy>-10) setSheet(false); else sheet.style.transform="";
+  }));
+}
 $("#clearSel").onclick=()=>{S.sel=-1;renderThreads();draw();$("#badge").classList.add("hidden")};
 
 function doneOf(ci){let n=0;for(let i=0;i<S.grid.length;i++) if(S.grid[i]===ci&&S.done[i])n++;return n}
@@ -812,7 +878,7 @@ function renderThreads(){
         b.classList.remove("hidden");
         b.innerHTML=`<span class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${c.sym}</span> DMC ${c.code} · осталось ${c.count-d}`;
       } else b.classList.add("hidden");
-      if(innerWidth<860) sheet.classList.remove("open");
+      if(innerWidth<860) setSheet(false);
     };
     list.appendChild(el);
   }
