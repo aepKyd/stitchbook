@@ -681,56 +681,23 @@ function findLines(w,h,grid,colors,level){
   const px=sx.getImageData(0,0,sc.width,sc.height).data, n=sc.width*sc.height, sub=new Float32Array(n*3);
   for(let i=0;i<n;i++){ const L=rgb2lab(px[i*4],px[i*4+1],px[i*4+2]); sub[i*3]=L[0]; sub[i*3+1]=L[1]; sub[i*3+2]=L[2]; }
   const base=colors.length;
-  const lines=Backstitch.find({w,h,k:K,sub,grid,palette:colors,level,pickThread:threadPicker(colors)});
-  return pruneThreads(lines,colors,base);
+  const lines=Backstitch.find({w,h,k:K,sub,grid,palette:colors,level,pickThread:Backstitch.threadPicker(colors,DMC_CAT)});
+  return Backstitch.pruneThreads(lines,colors,base);
 }
-/* бэкстич-нитки: оставить не больше 4 самых нужных; линии остальных — на ближайшую
-   оставшуюся нитку; неиспользованные (от выброшенных обрывков) убрать */
-function pruneThreads(lines,colors,base){
-  const use=new Map();
-  lines.forEach(l=>{ if(l.c>=base) use.set(l.c,(use.get(l.c)||0)+l.segs.length); });
-  const keep=new Set([...use.keys()].sort((a,b)=>use.get(b)-use.get(a)).slice(0,4));
-  const allowed=colors.map((c,i)=>i).filter(i=>i<base||keep.has(i));
-  for(const l of lines) if(l.c>=base && !keep.has(l.c)){
-    let best=allowed[0],bd=Infinity;
-    for(const i of allowed){ const d=dE(colors[i].lab,colors[l.c].lab); if(d<bd){bd=d;best=i;} }
-    l.c=best;
-  }
-  const remap=new Map(); let next=base;
-  for(let i=base;i<colors.length;i++) if(keep.has(i)) remap.set(i,next++);
-  const kept=colors.slice(base).filter((c,j)=>keep.has(base+j));
-  colors.length=base; colors.push(...kept);
-  for(const l of lines) if(l.c>=base) l.c=remap.get(l.c);
-  return mergeLines(lines);
-}
-/* после переназначения ниток соседние линии одной нитки склеиваются */
-function mergeLines(lines){
-  const parent=lines.map((l,i)=>i), root=i=>parent[i]===i?i:(parent[i]=root(parent[i]));
-  const at=new Map();
-  lines.forEach((l,i)=>{ for(const sg of l.segs) for(const n of sg){
-    const k=l.c+":"+n;
-    if(at.has(k)) parent[root(i)]=root(at.get(k)); else at.set(k,i);
-  }});
-  const out=new Map();
-  lines.forEach((l,i)=>{ const r=root(i); if(!out.has(r)) out.set(r,{c:l.c,segs:[]}); out.get(r).segs.push(...l.segs); });
-  return [...out.values()];
-}
-const dE=(a,b)=>Math.hypot(a[0]-b[0],a[1]-b[1],a[2]-b[2]);
-/* нитка для стежка: своя в пределах ΔE 10, иначе ближайшая DMC (лимит 4 — в pruneThreads) */
-function threadPicker(colors){
-  return lab=>{
-    let best=0,bd=Infinity;
-    colors.forEach((c,i)=>{ const d=dE(c.lab,lab); if(d<bd){bd=d;best=i;} });
-    if(bd<=10) return best;
-    let p=0,pd=Infinity;
-    for(let j=0;j<DMC_LAB.length;j++){ const d=dE(DMC_LAB[j],lab); if(d<pd){pd=d;p=j;} }
-    const have=colors.findIndex(c=>c.code===DMC[p].code);
-    if(have>=0) return have;
-    colors.push({...DMC[p],lab:DMC_LAB[p],bs:true,sym:"",count:0,skip:false});
-    return colors.length-1;
-  };
-}
+const DMC_CAT=DMC.map((d,i)=>({...d,lab:DMC_LAB[i]}));
 const nodeXY=n=>[n%(S.w+1), Math.floor(n/(S.w+1))];
+/* рамка линии в узлах [x0,y0,x1,y1] — для отсечения при отрисовке; считается один раз */
+const boxes=new WeakMap();
+function lineBox(l){
+  let b=boxes.get(l);
+  if(!b){
+    b=[Infinity,Infinity,-Infinity,-Infinity];
+    for(const sg of l.segs) for(const n of sg){ const [x,y]=nodeXY(n);
+      b[0]=Math.min(b[0],x); b[1]=Math.min(b[1],y); b[2]=Math.max(b[2],x); b[3]=Math.max(b[3],y); }
+    boxes.set(l,b);
+  }
+  return b;
+}
 
 /* схема построена — форма настроек больше не нужна, фото освобождаем */
 function resetSetupForm(){
@@ -830,22 +797,30 @@ function draw(){
       ctx.beginPath();ctx.moveTo(ox+c0*s,oy+y*s);ctx.lineTo(ox+c1*s,oy+y*s);ctx.stroke();
     }
   }
-  // бэкстич поверх крестиков
+  // бэкстич поверх крестиков: только видимые линии, один путь на (нитка, приглушена, сделана)
   if(s>=3.5 && S.lines.length){
-    const lw=Math.max(1.5,s*.14);
-    ctx.lineCap="round";
+    const lw=Math.max(1.5,s*.14), groups=new Map();
     S.lines.forEach((ln,li)=>{
       const col=S.colors[ln.c]; if(col.skip) return;
+      const bb=lineBox(ln);
+      if(bb[2]<c0||bb[0]>c1||bb[3]<r0||bb[1]>r1) return;
       const done=S.lineDone[li]===1;
-      ctx.globalAlpha=((S.fade==="done"?done:!done) || (S.sel>=0&&ln.c!==S.sel)) ? .3 : 1;
+      const dim=(S.fade==="done"?done:!done) || (S.sel>=0&&ln.c!==S.sel);
+      const key=ln.c+"|"+(dim?1:0)+"|"+(done?1:0);
+      if(!groups.has(key)) groups.set(key,{col,dim,done,segs:[]});
+      groups.get(key).segs.push(...ln.segs);
+    });
+    ctx.lineCap="round";
+    for(const g of groups.values()){
+      ctx.globalAlpha=g.dim?.3:1;
       ctx.beginPath();
-      for(const [a,b] of ln.segs){
+      for(const [a,b] of g.segs){
         const [ax,ay]=nodeXY(a), [bx,by]=nodeXY(b);
         ctx.moveTo(ox+ax*s,oy+ay*s); ctx.lineTo(ox+bx*s,oy+by*s);
       }
-      ctx.strokeStyle=hex(col); ctx.lineWidth=lw; ctx.stroke();
-      if(done){ ctx.strokeStyle="rgba(255,167,15,.95)"; ctx.lineWidth=lw/2; ctx.stroke(); }
-    });
+      ctx.strokeStyle=hex(g.col); ctx.lineWidth=lw; ctx.stroke();
+      if(g.done){ ctx.strokeStyle="rgba(255,167,15,.95)"; ctx.lineWidth=lw/2; ctx.stroke(); }
+    }
     ctx.globalAlpha=1; ctx.lineCap="butt";
   }
   // идёт отметка — рамка на клетке, с которой она началась

@@ -1,7 +1,7 @@
 /* Поиск бэкстича на мелкой сетке k×k точек на клетку (Lab).
-   Контраст: граница клеток, где на фото переход резкий, а нитки близкие.
-   Детали: тонкий штрих в клетке, не попавший в её цвет, → лучший из шести
-   стежков (четыре стороны, две диагонали). Стежки одной нитки с общим узлом
+   Детали: тонкий штрих в клетке («дно» поперёк штриха), не попавший в её цвет,
+   → лучший из шести стежков (четыре стороны, две диагонали).
+   Контраст: граница клеток без деталей, где на фото переход резкий, а нитки близкие. Стежки одной нитки с общим узлом
    склеиваются в линии; линии короче двух стежков выбрасываются.
    Узел n = y*(w+1)+x; стежок [n1, n2], n1 < n2. */
 (function (root) {
@@ -25,7 +25,6 @@
   function find({ w, h, k = 4, sub, grid, palette, level, pickThread, T = T_DEFAULT }) {
     if (!level) return [];
     if (k !== 4) throw new Error("backstitch: поддерживается только k = 4");
-    const tc = T.tc[level], td = T.td[level];
     const W = w * k, H = h * k;
     const node = (x, y) => y * (w + 1) + x;
     const segs = new Map();   // "n1-n2" → {n1, n2, c, kind}
@@ -48,72 +47,83 @@
       return [L / n, a / n, b / n];
     }
 
-    /* --- шаг 1: контраст --- */
-    const depth = k / 2;
-    function edge(gA, gB, srcA, srcB, p, q) {
-      const dSrc = dist(srcA, srcB);
-      if (dSrc < tc) return;
-      const la = palette[gA].lab, lb = palette[gB].lab;
-      if (dist(la, lb) > dSrc / 2) return;
-      const dark = la[0] <= lb[0] ? la : lb;
-      put(p, q, [Math.max(5, dark[0] - 20), dark[1], dark[2]], "contrast");
-    }
-    for (let y = 0; y < h; y++) for (let x = 0; x + 1 < w; x++) {      // вертикальные границы
-      const bx = (x + 1) * k;
-      edge(grid[y * w + x], grid[y * w + x + 1],
-        meanLab(bx - depth, y * k, bx, (y + 1) * k), meanLab(bx, y * k, bx + depth, (y + 1) * k),
-        [x + 1, y], [x + 1, y + 1]);
-    }
-    for (let y = 0; y + 1 < h; y++) for (let x = 0; x < w; x++) {      // горизонтальные границы
-      const by = (y + 1) * k;
-      edge(grid[y * w + x], grid[(y + 1) * w + x],
-        meanLab(x * k, by - depth, (x + 1) * k, by), meanLab(x * k, by, (x + 1) * k, by + depth),
-        [x, y + 1], [x + 1, y + 1]);
-    }
+    /* Уровень L включает всё, что находят уровни 1..L: иначе на текстуре «много»
+       отбрасывало бы клетки с избытком штрихов и давало меньше линий, чем «мало». */
+    const Lat = (sx, sy) => sub[(sy * W + sx) * 3];
+    for (let l = 1; l <= level; l++) pass(T.tc[l], T.td[l]);
 
-    /* --- шаг 2: детали --- */
-    // префиксные суммы L для фона по блоку 3×3 клеток
-    const ps = new Float64Array((W + 1) * (H + 1));
-    for (let sy = 0; sy < H; sy++) {
-      let row = 0;
-      for (let sx = 0; sx < W; sx++) {
-        row += sub[(sy * W + sx) * 3];
-        ps[(sy + 1) * (W + 1) + sx + 1] = ps[sy * (W + 1) + sx + 1] + row;
+    function pass(tc, td) {
+      /* --- шаг 1: детали ---
+         Точка-штрих — «дно» поперёк штриха: на 2 точки в обе стороны по горизонтали
+         или по вертикали светлее (для тёмного штриха) хотя бы на td. Так размытый
+         штрих утончается до середины, а ступенька края области деталью не считается. */
+      // у края картинки сравниваем с той стороной, которая есть
+      function across(L, a, b, dir) {
+        const v = [a, b].filter(t => t !== null);
+        return dir < 0 ? Math.min(...v) - L : L - Math.max(...v);
       }
-    }
-    const rectL = (x0, y0, x1, y1) =>
-      (ps[y1 * (W + 1) + x1] - ps[y0 * (W + 1) + x1] - ps[y1 * (W + 1) + x0] + ps[y0 * (W + 1) + x0]) / ((x1 - x0) * (y1 - y0));
+      function depth(sx, sy, L, dir) {   // dir −1: тёмный штрих, +1: светлый
+        const h1 = across(L, sx >= 2 ? Lat(sx - 2, sy) : null, sx + 2 < W ? Lat(sx + 2, sy) : null, dir);
+        const v1 = across(L, sy >= 2 ? Lat(sx, sy - 2) : null, sy + 2 < H ? Lat(sx, sy + 2) : null, dir);
+        return Math.max(h1, v1);
+      }
+      const detailCell = new Uint8Array(w * h);
+      const ridge = new Uint8Array(16), sign = new Int8Array(16);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const Lthr = palette[grid[y * w + x]].lab[0];
+        let dark = 0, light = 0;
+        sign.fill(0);
+        for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
+          const sx = x * k + c, sy = y * k + r, L = Lat(sx, sy);
+          if (Math.abs(L - Lthr) < td) continue;               // уже попало в цвет клетки
+          if (depth(sx, sy, L, -1) >= td) { sign[r * 4 + c] = -1; dark++; }
+          else if (depth(sx, sy, L, 1) >= td) { sign[r * 4 + c] = 1; light++; }
+        }
+        const pol = dark >= light ? -1 : 1, n = pol < 0 ? dark : light;
+        if (n < 2 || n > 8) continue;
+        detailCell[y * w + x] = 1;   // штрих есть — контраст рядом не ставим, даже если шаблон не подошёл
+        let lab = [0, 0, 0];
+        for (let i = 0; i < 16; i++) {
+          ridge[i] = sign[i] === pol ? 1 : 0;
+          if (ridge[i]) {
+            const j = ((y * k + (i >> 2)) * W + x * k + (i & 3)) * 3;
+            lab[0] += sub[j]; lab[1] += sub[j + 1]; lab[2] += sub[j + 2];
+          }
+        }
+        lab = lab.map(v => v / n);
+        let best = null, bestScore = 2;
+        for (const t of TEMPLATES) {
+          const score = t.slots.filter(slot => slot.some(([c, r]) => ridge[r * 4 + c])).length;
+          if (score > bestScore) { best = t; bestScore = score; }
+        }
+        if (best) { const [p, q] = best.seg(x, y); put(p, q, lab, "detail"); }
+      }
 
-    const ridge = new Uint8Array(16);
-    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
-      const Lbg = rectL(Math.max(0, x - 1) * k, Math.max(0, y - 1) * k, Math.min(w, x + 2) * k, Math.min(h, y + 2) * k);
-      const Lthr = palette[grid[y * w + x]].lab[0];
-      let dark = 0, light = 0;
-      const sign = new Int8Array(16);
-      for (let r = 0; r < 4; r++) for (let c = 0; c < 4; c++) {
-        const L = sub[((y * k + r) * W + x * k + c) * 3];
-        if (Math.abs(L - Lbg) >= td && Math.abs(L - Lthr) >= td) {
-          sign[r * 4 + c] = L < Lbg ? -1 : 1;
-          if (L < Lbg) dark++; else light++;
-        }
+      /* --- шаг 2: контраст ---
+         Границы клеток с деталью пропускаются: тонкий штрих у границы иначе даёт
+         «лесенку» контраста по обе стороны от самой детали. */
+      const depthK = k / 2;
+      function edge(iA, iB, srcA, srcB, p, q) {
+        if (detailCell[iA] || detailCell[iB]) return;
+        const dSrc = dist(srcA, srcB);
+        if (dSrc < tc) return;
+        const la = palette[grid[iA]].lab, lb = palette[grid[iB]].lab;
+        if (dist(la, lb) > dSrc / 2) return;
+        const dark = la[0] <= lb[0] ? la : lb;
+        put(p, q, [Math.max(5, dark[0] - 20), dark[1], dark[2]], "contrast");
       }
-      const pol = dark >= light ? -1 : 1, n = pol < 0 ? dark : light;
-      if (n < 2 || n > 8) continue;
-      let lab = [0, 0, 0];
-      for (let i = 0; i < 16; i++) {
-        ridge[i] = sign[i] === pol ? 1 : 0;
-        if (ridge[i]) {
-          const j = ((y * k + (i >> 2)) * W + x * k + (i & 3)) * 3;
-          lab[0] += sub[j]; lab[1] += sub[j + 1]; lab[2] += sub[j + 2];
-        }
+      for (let y = 0; y < h; y++) for (let x = 0; x + 1 < w; x++) {      // вертикальные границы
+        const bx = (x + 1) * k;
+        edge(y * w + x, y * w + x + 1,
+          meanLab(bx - depthK, y * k, bx, (y + 1) * k), meanLab(bx, y * k, bx + depthK, (y + 1) * k),
+          [x + 1, y], [x + 1, y + 1]);
       }
-      lab = lab.map(v => v / n);
-      let best = null, bestScore = 2;
-      for (const t of TEMPLATES) {
-        const score = t.slots.filter(slot => slot.some(([c, r]) => ridge[r * 4 + c])).length;
-        if (score > bestScore) { best = t; bestScore = score; }
+      for (let y = 0; y + 1 < h; y++) for (let x = 0; x < w; x++) {      // горизонтальные границы
+        const by = (y + 1) * k;
+        edge(y * w + x, (y + 1) * w + x,
+          meanLab(x * k, by - depthK, (x + 1) * k, by), meanLab(x * k, by, (x + 1) * k, by + depthK),
+          [x, y + 1], [x + 1, y + 1]);
       }
-      if (best) { const [p, q] = best.seg(x, y); put(p, q, lab, "detail"); }
     }
 
     /* --- шаг 3: линии --- */
@@ -142,7 +152,63 @@
     return lines;
   }
 
-  const api = { find, T_DEFAULT };
+  /* Нитка для стежка: своя в пределах ΔE 10, иначе ближайшая из каталога
+     (новая добавляется в colors с bs:true). Нитка контраста обязана быть темнее
+     тёмной стороны хотя бы на 10: цель — эта сторона с L−20, значит L ≤ цель+10. */
+  function threadPicker(colors, catalog) {
+    return (lab, kind) => {
+      const ok = L => kind !== "contrast" || L <= lab[0] + 10;
+      let best = -1, bd = Infinity;
+      colors.forEach((c, i) => { const d = dist(c.lab, lab); if (ok(c.lab[0]) && d < bd) { bd = d; best = i; } });
+      if (bd <= 10) return best;
+      let p = -1, pd = Infinity;
+      catalog.forEach((c, j) => { const d = dist(c.lab, lab); if (ok(c.lab[0]) && d < pd) { pd = d; p = j; } });
+      if (p < 0) return best >= 0 ? best : 0;
+      const have = colors.findIndex(c => c.code === catalog[p].code);
+      if (have >= 0) return have;
+      colors.push({ ...catalog[p], bs: true, sym: "", count: 0, skip: false });
+      return colors.length - 1;
+    };
+  }
+
+  /* Не больше 4 бэкстич-ниток (индексы ≥ base): остаются самые используемые.
+     Линии остальных — на близкую (ΔE ≤ 15) оставшуюся бэкстич-нитку, иначе линия
+     выбрасывается: нитка крестиков сделала бы её невидимой. Неиспользованные
+     бэкстич-нитки убираются из colors, индексы линий пересчитываются. */
+  function pruneThreads(lines, colors, base, max = 4) {
+    const use = new Map();
+    lines.forEach(l => { if (l.c >= base) use.set(l.c, (use.get(l.c) || 0) + l.segs.length); });
+    const keep = new Set([...use.keys()].sort((a, b) => use.get(b) - use.get(a)).slice(0, max));
+    for (const l of lines) if (l.c >= base && !keep.has(l.c)) {
+      let best = -1, bd = 15;
+      for (const i of keep) { const d = dist(colors[i].lab, colors[l.c].lab); if (d <= bd) { bd = d; best = i; } }
+      l.c = best;
+    }
+    lines = lines.filter(l => l.c >= 0);
+    const remap = new Map(); let next = base;
+    for (let i = base; i < colors.length; i++) if (keep.has(i)) remap.set(i, next++);
+    const kept = colors.slice(base).filter((c, j) => keep.has(base + j));
+    colors.length = base; colors.push(...kept);
+    for (const l of lines) if (l.c >= base) l.c = remap.get(l.c);
+    return mergeLines(lines);
+  }
+
+  // линии одной нитки с общим узлом склеиваются
+  function mergeLines(lines) {
+    const parent = lines.map((l, i) => i);
+    const root = i => { while (parent[i] !== i) { parent[i] = parent[parent[i]]; i = parent[i]; } return i; };
+    const at = new Map();
+    lines.forEach((l, i) => { for (const sg of l.segs) for (const n of sg) {
+      const key = l.c + ":" + n;
+      if (at.has(key)) { const a = root(i), b = root(at.get(key)); if (a !== b) parent[a] = b; }
+      else at.set(key, i);
+    } });
+    const out = new Map();
+    lines.forEach((l, i) => { const r = root(i); if (!out.has(r)) out.set(r, { c: l.c, segs: [] }); out.get(r).segs.push(...l.segs); });
+    return [...out.values()];
+  }
+
+  const api = { find, threadPicker, pruneThreads, mergeLines, T_DEFAULT };
   root.Backstitch = api;
   if (typeof module === "object" && module.exports) module.exports = api;
 })(typeof self !== "undefined" ? self : globalThis);
