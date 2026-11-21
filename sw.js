@@ -1,10 +1,11 @@
 /* Крестик — service worker.
    Стратегия: приложение целиком лежит в кэше и открывается без сети.
    Обновление: новая версия ставится рядом и включается по кнопке «Обновить». */
-const VERSION = "stitchbook-v1";
+const VERSION = "stitchbook-v2";
 const ASSETS = [
   "./",
   "index.html",
+  "stitchfile.js",
   "fonts.css",
   "manifest.webmanifest",
   "icons/icon-180.png",
