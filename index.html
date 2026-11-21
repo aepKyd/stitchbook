@@ -97,7 +97,8 @@ input[type=text],select{width:100%;padding:9px 10px;border:1px solid var(--rule-
 .work{flex:1;display:flex;min-height:0}
 .canvasWrap{flex:1;position:relative;min-width:0;background:
   repeating-conic-gradient(#e7e9e2 0% 25%, #eef0ea 0% 50%) 0 0/16px 16px}
-#chart{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block}
+#chart{position:absolute;inset:0;width:100%;height:100%;touch-action:none;display:block;
+  -webkit-touch-callout:none;-webkit-user-select:none;user-select:none}
 .tools{
   position:absolute;left:50%;transform:translateX(-50%);bottom:calc(12px + env(safe-area-inset-bottom));
   display:flex;gap:6px;padding:6px;background:var(--card);
@@ -245,8 +246,6 @@ label.btn{display:inline-block}
       <canvas id="chart"></canvas>
       <div class="badge hidden" id="badge"></div>
       <div class="tools">
-        <button class="btn on" id="mStitch" title="Отмечать крестики">✎ Шить</button>
-        <button class="btn" id="mPan" title="Двигать схему">✥</button>
         <button class="btn" id="undo" title="Отменить">↶</button>
         <button class="btn" id="fit" title="Вписать">⤢</button>
         <button class="btn" id="openThreads">Нитки</button>
@@ -276,6 +275,7 @@ label.btn{display:inline-block}
 <div class="updbar hidden" id="updbar"><span class="t">Вышла новая версия</span><button class="btn" id="updBtn">Обновить</button></div>
 
 <script src="stitchfile.js"></script>
+<script src="gestures.js"></script>
 <script>
 "use strict";
 /* ============================ палитра DMC ============================ */
@@ -446,7 +446,7 @@ const unrle=(o,Type)=>{let len=0;for(let i=1;i<o.length;i+=2)len+=o[i];const a=n
 const S={
   id:null,name:"",w:0,h:0,count:14,
   grid:null,colors:[],done:null,
-  view:{s:14,ox:0,oy:0}, mode:"stitch", sel:-1, fade:"done",
+  view:{s:14,ox:0,oy:0}, sel:-1, fade:"done",
   undo:[], img:null, crop:null
 };
 const $=s=>document.querySelector(s);
@@ -678,6 +678,7 @@ function openWork(){
   $("#progWrap").classList.remove("hidden");
   $("#backBtn").classList.remove("hidden");
   $("#projName").textContent="· "+S.name;
+  hintShown=false; stroke=null;
   resize(); renderThreads(); updateProgress();
 }
 $("#backBtn").onclick=()=>{
@@ -757,60 +758,64 @@ function draw(){
       ctx.beginPath();ctx.moveTo(ox+c0*s,oy+y*s);ctx.lineTo(ox+c1*s,oy+y*s);ctx.stroke();
     }
   }
+  // идёт отметка — рамка на клетке, с которой она началась
+  if(stroke&&stroke.start){
+    ctx.strokeStyle="#ffd23f"; ctx.lineWidth=2;
+    ctx.strokeRect(ox+stroke.start.x*s+1,oy+stroke.start.y*s+1,s-2,s-2);
+  }
 }
 
-/* --- жесты --- */
-const pointers=new Map();
-let stroke=null, pinch=null, panFrom=null;
+/* --- жесты: автомат в gestures.js, здесь только перевод событий и действий --- */
+let stroke=null, holdT=null, hintShown=false;
+const zoomAround=(ns,x,y)=>{
+  const r=cv.getBoundingClientRect(), px=x-r.left, py=y-r.top;
+  ns=Math.max(1.2,Math.min(70,ns)); const k=ns/S.view.s;
+  S.view.ox=px-(px-S.view.ox)*k; S.view.oy=py-(py-S.view.oy)*k; S.view.s=ns;
+};
+const G=Gestures.create({
+  canMark:kind=>S.view.s>=(kind==="touch"?14:6),
+  emit(a){
+    switch(a.type){
+      case "pan": S.view.ox+=a.dx; S.view.oy+=a.dy; draw(); break;
+      case "pinch": S.view.ox+=a.dx; S.view.oy+=a.dy; zoomAround(S.view.s*a.scale,a.cx,a.cy); draw(); break;
+      case "zoomTo": zoomAround(22,a.x,a.y); draw(); break;
+      case "markStart": {
+        const c=cellAt({clientX:a.x,clientY:a.y});
+        stroke={val:null, cells:new Set(), snapshot:S.done.slice(), start:c};
+        if(c) paint(c); else draw();
+        break;
+      }
+      case "markMove": { const c=cellAt({clientX:a.x,clientY:a.y}); if(c&&stroke) paint(c); break; }
+      case "markEnd":
+        if(!stroke) break;
+        if(stroke.cells.size){ S.undo.push(stroke.snapshot); if(S.undo.length>40)S.undo.shift(); }
+        stroke=null; draw(); updateProgress(); renderThreads(); queueSave();
+        break;
+      case "markCancel":   // второй палец или Pencil — отметка не считается
+        if(!stroke) break;
+        S.done=stroke.snapshot; stroke=null; draw();
+        break;
+      case "hint":
+        if(!hintShown && cellAt({clientX:a.x,clientY:a.y})){ hintShown=true; toast("Удерживайте палец, чтобы отметить"); }
+        break;
+    }
+  }
+});
+const ptr=e=>({id:e.pointerId, kind:e.pointerType==="pen"?"pen":e.pointerType==="mouse"?"mouse":"touch",
+  button:e.button, x:e.clientX, y:e.clientY, t:e.timeStamp});
+function scheduleHold(){
+  clearTimeout(holdT); holdT=null;
+  const d=G.holdDeadline();
+  if(d!==null) holdT=setTimeout(()=>G.tick(performance.now()), Math.max(0,d-performance.now())+5);
+}
 cv.addEventListener("pointerdown",e=>{
-  cv.setPointerCapture(e.pointerId);
-  pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(pointers.size===2){
-    stroke=null;
-    const [a,b]=[...pointers.values()];
-    pinch={d:Math.hypot(a.x-b.x,a.y-b.y),s:S.view.s,
-           cx:(a.x+b.x)/2,cy:(a.y+b.y)/2,ox:S.view.ox,oy:S.view.oy};
-    return;
-  }
-  const p=cellAt(e);
-  if(S.mode==="stitch"&&p){
-    const i=p.y*S.w+p.x;
-    if(S.colors[S.grid[i]].skip) return;
-    stroke={val:S.done[i]?0:1, cells:new Set(), snapshot:S.done.slice()};
-    paint(p);
-  }else{
-    panFrom={x:e.clientX,y:e.clientY,ox:S.view.ox,oy:S.view.oy};
-  }
+  try{ cv.setPointerCapture(e.pointerId); }catch(err){}   // без захвата жест всё равно должен работать
+  G.down(ptr(e)); scheduleHold();
 });
-cv.addEventListener("pointermove",e=>{
-  if(pointers.has(e.pointerId)) pointers.set(e.pointerId,{x:e.clientX,y:e.clientY});
-  if(pinch&&pointers.size===2){
-    const [a,b]=[...pointers.values()];
-    const d=Math.hypot(a.x-b.x,a.y-b.y);
-    const r=cv.getBoundingClientRect();
-    const ns=Math.max(1.2,Math.min(70,pinch.s*d/pinch.d));
-    const k=ns/pinch.s;
-    S.view.s=ns;
-    S.view.ox=(pinch.cx-r.left)-((pinch.cx-r.left)-pinch.ox)*k;
-    S.view.oy=(pinch.cy-r.top)-((pinch.cy-r.top)-pinch.oy)*k;
-    draw(); return;
-  }
-  if(stroke){ const p=cellAt(e); if(p) paint(p); return; }
-  if(panFrom){
-    S.view.ox=panFrom.ox+(e.clientX-panFrom.x);
-    S.view.oy=panFrom.oy+(e.clientY-panFrom.y);
-    draw();
-  }
-});
-["pointerup","pointercancel"].forEach(ev=>cv.addEventListener(ev,e=>{
-  pointers.delete(e.pointerId);
-  if(pointers.size<2) pinch=null;
-  if(stroke){
-    if(stroke.cells.size){ S.undo.push(stroke.snapshot); if(S.undo.length>40)S.undo.shift(); }
-    stroke=null; updateProgress(); renderThreads(); queueSave();
-  }
-  panFrom=null;
-}));
+cv.addEventListener("pointermove",e=>{ G.move(ptr(e)); scheduleHold(); });
+cv.addEventListener("pointerup",e=>{ G.up(ptr(e)); scheduleHold(); });
+cv.addEventListener("pointercancel",e=>{ G.cancel(ptr(e)); scheduleHold(); });
+cv.addEventListener("contextmenu",e=>e.preventDefault());
 cv.addEventListener("wheel",e=>{
   e.preventDefault();
   const r=cv.getBoundingClientRect(), k=Math.exp(-e.deltaY*0.0015);
@@ -831,6 +836,7 @@ function paint(p){
   if(stroke.cells.has(i)) return;
   if(S.colors[S.grid[i]].skip) return;
   if(S.sel>=0 && S.grid[i]!==S.sel) return;   // выбран цвет — красим только его
+  if(stroke.val===null) stroke.val=S.done[i]?0:1;   // «поставить/снять» решает первая изменяемая клетка
   stroke.cells.add(i); S.done[i]=stroke.val; draw();
 }
 $("#undo").onclick=()=>{
@@ -838,8 +844,6 @@ $("#undo").onclick=()=>{
   if(!prev) return toast("Отменять нечего");
   S.done=prev; draw(); updateProgress(); renderThreads(); queueSave();
 };
-$("#mStitch").onclick=()=>{S.mode="stitch";$("#mStitch").classList.add("on");$("#mPan").classList.remove("on")};
-$("#mPan").onclick=()=>{S.mode="pan";$("#mPan").classList.add("on");$("#mStitch").classList.remove("on")};
 $("#fade").onclick=()=>{
   S.fade=S.fade==="done"?"todo":"done";
   $("#fade").textContent="Гасить: "+(S.fade==="done"?"сделанное":"оставшееся");
