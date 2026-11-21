@@ -87,3 +87,52 @@ test("распознаёт файл схемы по имени и типу", () 
   assert.equal(looksLikeStitchFile({ name: "IMG_1.HEIC", type: "image/heic" }), false);
   assert.equal(looksLikeStitchFile({ name: "photo.jpg", type: "image/jpeg" }), false);
 });
+
+/* --- формат v2: линии бэкстича --- */
+function sample2(over = {}) {
+  return sample({ v: 2, lines: [{ c: 0, s: [0, 5, 5, 10] }], lineDone: [1, 1], ...over });
+}
+
+test("v1 → пустые линии", () => {
+  const p = parseStitchFile(txt(sample()));
+  assert.equal(p.v, 2);
+  assert.deepEqual(p.lines, []);
+  assert.deepEqual(p.lineDone, []);
+  assert.equal(p.colors[0].bs, false);
+});
+
+test("v2 принимается", () => {
+  const p = parseStitchFile(txt(sample2()));
+  assert.deepEqual(p.lines, [{ c: 0, s: [0, 5, 5, 10] }]);
+  assert.deepEqual(p.lineDone, [1, 1]);
+});
+
+test("v2 без линий", () => {
+  const p = parseStitchFile(txt(sample2({ lines: [], lineDone: [] })));
+  assert.deepEqual(p.lines, []);
+});
+
+for (const [name, over] of [
+  ["узел за пределами", { lines: [{ c: 0, s: [0, 5, 5, 99] }] }],
+  ["несоседние узлы", { lines: [{ c: 0, s: [0, 2, 2, 7] }] }],
+  ["линия из одного стежка", { lines: [{ c: 0, s: [0, 5] }], lineDone: [0, 1] }],
+  ["lineDone не той длины", { lineDone: [1, 2] }],
+  ["lineDone не 0/1", { lineDone: [2, 1] }],
+  ["индекс нитки вне палитры", { lines: [{ c: 5, s: [0, 5, 5, 10] }] }],
+  ["стежок из совпадающих узлов", { lines: [{ c: 0, s: [5, 5, 5, 10] }] }]
+]) {
+  test(`v2: ${name} — повреждён`, () => {
+    assert.throws(() => parseStitchFile(txt(sample2(over))), /повреждён/);
+  });
+}
+
+test("версия 3", () => {
+  assert.throws(() => parseStitchFile(txt(sample2({ v: 3 }))), /версии 3/);
+});
+
+test("bs сохраняется", () => {
+  const s = sample2(); s.colors[1].bs = true;
+  const p = parseStitchFile(txt(s));
+  assert.equal(p.colors[1].bs, true);
+  assert.equal(p.colors[0].bs, false);
+});
