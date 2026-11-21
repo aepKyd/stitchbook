@@ -217,6 +217,11 @@ label.btn{display:inline-block}
         <input type="range" id="c" min="4" max="60" step="1" value="30">
       </div>
       <div class="field">
+        <label for="bs">Контуры <b id="bsv">средне</b></label>
+        <input type="range" id="bs" min="0" max="3" step="1" value="2">
+        <p class="hint">Бэкстич там, где переход потерял контраст, и по деталям тоньше крестика.</p>
+      </div>
+      <div class="field">
         <label for="ct">Канва <em>крестиков на дюйм</em></label>
         <select id="ct">
           <option value="11">Aida 11 — крупная</option>
@@ -276,6 +281,7 @@ label.btn{display:inline-block}
 
 <script src="stitchfile.js"></script>
 <script src="gestures.js"></script>
+<script src="backstitch.js"></script>
 <script>
 "use strict";
 /* ============================ палитра DMC ============================ */
@@ -446,6 +452,7 @@ const unrle=(o,Type)=>{let len=0;for(let i=1;i<o.length;i+=2)len+=o[i];const a=n
 const S={
   id:null,name:"",w:0,h:0,count:14,
   grid:null,colors:[],done:null,
+  lines:[], lineDone:new Uint8Array(0),   // бэкстич: [{c, segs:[[n1,n2],…]}], узел n = y*(w+1)+x
   view:{s:14,ox:0,oy:0}, sel:-1, fade:"done",
   undo:[], img:null, crop:null
 };
@@ -572,9 +579,11 @@ async function loadImage(file){
     setStatus("Браузер не дал нарисовать картинку: "+e.message,true);
   }
 }
-["w","c","ct"].forEach(id=>$("#"+id).addEventListener("input",updateSetupStats));
+["w","c","ct","bs"].forEach(id=>$("#"+id).addEventListener("input",updateSetupStats));
+const BS_LEVELS=["нет","мало","средне","много"];
 function updateSetupStats(){
   $("#wv").textContent=$("#w").value; $("#cv").textContent=$("#c").value;
+  $("#bsv").textContent=BS_LEVELS[+$("#bs").value];
   if(!S.crop) return;
   const w=+$("#w").value, h=Math.max(1,Math.round(w*S.crop.h/S.crop.w)), ct=+$("#ct").value;
   const cm=v=>(v/ct*2.54).toFixed(1);
@@ -651,15 +660,45 @@ function build(){
   for(let i=0;i<grid.length;i++) colors[grid[i]].count++;
   const order=colors.map((c,i)=>i).sort((a,b)=>colors[a].lab[0]-colors[b].lab[0]);
   order.forEach((ci,rank)=>colors[ci].sym=SYMBOLS[rank%SYMBOLS.length]);
+  const lines=findLines(w,h,grid,colors,+$("#bs").value);
 
   Object.assign(S,{
     id:"p"+Date.now().toString(36), name:"Схема "+new Date().toLocaleDateString("ru",{day:"2-digit",month:"2-digit"}),
-    w,h,count:+$("#ct").value, grid, colors, done:new Uint8Array(w*h), sel:-1, undo:[]
+    w,h,count:+$("#ct").value, grid, colors, done:new Uint8Array(w*h), sel:-1, undo:[],
+    lines, lineDone:new Uint8Array(lines.length)
   });
   $("#busy").classList.add("hidden");
   openWork(); fitView(); saveProject(); refreshProjects();
   resetSetupForm();
 }
+/* бэкстич: кроп ещё раз, 4×4 точки на клетку, в Lab — и поиск в backstitch.js */
+function findLines(w,h,grid,colors,level){
+  if(!level) return [];
+  const K=4, sc=document.createElement("canvas"); sc.width=w*K; sc.height=h*K;
+  const sx=sc.getContext("2d",{willReadFrequently:true});
+  sx.imageSmoothingEnabled=true; sx.imageSmoothingQuality="high";
+  sx.drawImage(S.img,S.crop.x,S.crop.y,S.crop.w,S.crop.h,0,0,sc.width,sc.height);
+  const px=sx.getImageData(0,0,sc.width,sc.height).data, n=sc.width*sc.height, sub=new Float32Array(n*3);
+  for(let i=0;i<n;i++){ const L=rgb2lab(px[i*4],px[i*4+1],px[i*4+2]); sub[i*3]=L[0]; sub[i*3+1]=L[1]; sub[i*3+2]=L[2]; }
+  const base=colors.length;
+  const lines=Backstitch.find({w,h,k:K,sub,grid,palette:colors,level,pickThread:Backstitch.threadPicker(colors,DMC_CAT)});
+  return Backstitch.pruneThreads(lines,colors,base);
+}
+const DMC_CAT=DMC.map((d,i)=>({...d,lab:DMC_LAB[i]}));
+const nodeXY=n=>[n%(S.w+1), Math.floor(n/(S.w+1))];
+/* рамка линии в узлах [x0,y0,x1,y1] — для отсечения при отрисовке; считается один раз */
+const boxes=new WeakMap();
+function lineBox(l){
+  let b=boxes.get(l);
+  if(!b){
+    b=[Infinity,Infinity,-Infinity,-Infinity];
+    for(const sg of l.segs) for(const n of sg){ const [x,y]=nodeXY(n);
+      b[0]=Math.min(b[0],x); b[1]=Math.min(b[1],y); b[2]=Math.max(b[2],x); b[3]=Math.max(b[3],y); }
+    boxes.set(l,b);
+  }
+  return b;
+}
+
 /* схема построена — форма настроек больше не нужна, фото освобождаем */
 function resetSetupForm(){
   S.img=null; S.crop=null;
@@ -758,6 +797,32 @@ function draw(){
       ctx.beginPath();ctx.moveTo(ox+c0*s,oy+y*s);ctx.lineTo(ox+c1*s,oy+y*s);ctx.stroke();
     }
   }
+  // бэкстич поверх крестиков: только видимые линии, один путь на (нитка, приглушена, сделана)
+  if(s>=3.5 && S.lines.length){
+    const lw=Math.max(1.5,s*.14), groups=new Map();
+    S.lines.forEach((ln,li)=>{
+      const col=S.colors[ln.c]; if(col.skip) return;
+      const bb=lineBox(ln);
+      if(bb[2]<c0||bb[0]>c1||bb[3]<r0||bb[1]>r1) return;
+      const done=S.lineDone[li]===1;
+      const dim=(S.fade==="done"?done:!done) || (S.sel>=0&&ln.c!==S.sel);
+      const key=ln.c+"|"+(dim?1:0)+"|"+(done?1:0);
+      if(!groups.has(key)) groups.set(key,{col,dim,done,segs:[]});
+      groups.get(key).segs.push(...ln.segs);
+    });
+    ctx.lineCap="round";
+    for(const g of groups.values()){
+      ctx.globalAlpha=g.dim?.3:1;
+      ctx.beginPath();
+      for(const [a,b] of g.segs){
+        const [ax,ay]=nodeXY(a), [bx,by]=nodeXY(b);
+        ctx.moveTo(ox+ax*s,oy+ay*s); ctx.lineTo(ox+bx*s,oy+by*s);
+      }
+      ctx.strokeStyle=hex(g.col); ctx.lineWidth=lw; ctx.stroke();
+      if(g.done){ ctx.strokeStyle="rgba(255,167,15,.95)"; ctx.lineWidth=lw/2; ctx.stroke(); }
+    }
+    ctx.globalAlpha=1; ctx.lineCap="butt";
+  }
   // идёт отметка — рамка на клетке, с которой она началась
   if(stroke&&stroke.start){
     ctx.strokeStyle="#ffd23f"; ctx.lineWidth=2;
@@ -780,20 +845,27 @@ const G=Gestures.create({
       case "pinch": S.view.ox+=a.dx; S.view.oy+=a.dy; zoomAround(S.view.s*a.scale,a.cx,a.cy); draw(); break;
       case "zoomTo": zoomAround(22,a.x,a.y); draw(); break;
       case "markStart": {
+        const snap={snapshot:S.done.slice(), lineSnapshot:S.lineDone.slice()};
+        const li=lineAt(a.x,a.y);
+        if(li>=0){   // рядом линия бэкстича — переключаем её целиком, крестики не трогаем
+          stroke={...snap, line:li};
+          S.lineDone[li]^=1; draw();
+          break;
+        }
         const c=cellAt({clientX:a.x,clientY:a.y});
-        stroke={val:null, cells:new Set(), snapshot:S.done.slice(), start:c};
+        stroke={...snap, val:null, cells:new Set(), start:c};
         if(c) paint(c); else draw();
         break;
       }
-      case "markMove": { const c=cellAt({clientX:a.x,clientY:a.y}); if(c&&stroke) paint(c); break; }
+      case "markMove": { const c=cellAt({clientX:a.x,clientY:a.y}); if(c&&stroke&&stroke.cells) paint(c); break; }
       case "markEnd":
         if(!stroke) break;
-        if(stroke.cells.size){ S.undo.push(stroke.snapshot); if(S.undo.length>40)S.undo.shift(); }
+        if(stroke.line!==undefined || stroke.cells.size) pushUndo({done:stroke.snapshot, lineDone:stroke.lineSnapshot});
         stroke=null; draw(); updateProgress(); renderThreads(); queueSave();
         break;
       case "markCancel":   // второй палец или Pencil — отметка не считается
         if(!stroke) break;
-        S.done=stroke.snapshot; stroke=null; draw();
+        S.done=stroke.snapshot; S.lineDone=stroke.lineSnapshot; stroke=null; draw();
         break;
       case "hint":
         if(!hintShown && cellAt({clientX:a.x,clientY:a.y})){ hintShown=true; toast("Удерживайте палец, чтобы отметить"); }
@@ -834,6 +906,23 @@ function cellAt(e){
   const y=Math.floor((e.clientY-r.top-S.view.oy)/S.view.s);
   return (x>=0&&y>=0&&x<S.w&&y<S.h)?{x,y}:null;
 }
+/* линия бэкстича под точкой: ближайший стежок не дальше max(8 px, 0.3 клетки) */
+function lineAt(x,y){
+  const r=cv.getBoundingClientRect(), px=x-r.left, py=y-r.top, {s,ox,oy}=S.view;
+  let best=-1, bd=Math.max(8,.3*s);
+  S.lines.forEach((ln,li)=>{
+    if(S.colors[ln.c].skip || (S.sel>=0&&ln.c!==S.sel)) return;
+    for(const [a,b] of ln.segs){
+      const [ax0,ay0]=nodeXY(a), [bx0,by0]=nodeXY(b);
+      const ax=ox+ax0*s, ay=oy+ay0*s, dx=(bx0-ax0)*s, dy=(by0-ay0)*s;
+      const t=Math.max(0,Math.min(1,((px-ax)*dx+(py-ay)*dy)/(dx*dx+dy*dy)));
+      const d=Math.hypot(px-ax-t*dx,py-ay-t*dy);
+      if(d<=bd){ bd=d; best=li; }
+    }
+  });
+  return best;
+}
+function pushUndo(u){ S.undo.push(u); if(S.undo.length>40) S.undo.shift(); }
 function paint(p){
   const i=p.y*S.w+p.x;
   if(stroke.cells.has(i)) return;
@@ -845,7 +934,7 @@ function paint(p){
 $("#undo").onclick=()=>{
   const prev=S.undo.pop();
   if(!prev) return toast("Отменять нечего");
-  S.done=prev; draw(); updateProgress(); renderThreads(); queueSave();
+  S.done=prev.done; S.lineDone=prev.lineDone; draw(); updateProgress(); renderThreads(); queueSave();
 };
 $("#fade").onclick=()=>{
   S.fade=S.fade==="done"?"todo":"done";
@@ -881,34 +970,41 @@ sheetBackdrop.onclick=()=>setSheet(false);
 }
 $("#clearSel").onclick=()=>{S.sel=-1;renderThreads();draw();$("#badge").classList.add("hidden")};
 
-function doneOf(ci){let n=0;for(let i=0;i<S.grid.length;i++) if(S.grid[i]===ci&&S.done[i])n++;return n}
+/* у нитки — крестики плюс стежки её линий бэкстича */
+function totalOf(ci){let n=S.colors[ci].count;S.lines.forEach(l=>{if(l.c===ci)n+=l.segs.length});return n}
+function doneOf(ci){let n=0;for(let i=0;i<S.grid.length;i++) if(S.grid[i]===ci&&S.done[i])n++;
+  S.lines.forEach((l,li)=>{if(l.c===ci&&S.lineDone[li])n+=l.segs.length});return n}
+function setThread(ci,val){
+  for(let j=0;j<S.grid.length;j++) if(S.grid[j]===ci) S.done[j]=val;
+  S.lines.forEach((l,li)=>{if(l.c===ci) S.lineDone[li]=val});
+}
 function renderThreads(){
   const list=$("#tlist"); list.innerHTML="";
-  const idx=S.colors.map((c,i)=>i).sort((a,b)=>S.colors[b].count-S.colors[a].count);
+  const tot=S.colors.map((c,i)=>totalOf(i));
+  const idx=S.colors.map((c,i)=>i).filter(i=>tot[i]>0).sort((a,b)=>tot[b]-tot[a]);
   for(const i of idx){
-    const c=S.colors[i], d=doneOf(i), pc=c.count?Math.round(d/c.count*100):0;
+    const c=S.colors[i], d=doneOf(i), t=tot[i], pc=t?Math.round(d/t*100):0;
     const el=document.createElement("div");
     el.className="th"+(S.sel===i?" sel":"")+(c.skip?" skip":"");
     el.innerHTML=`
-      <div class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${esc(c.sym)}</div>
+      <div class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${c.bs?"╱":esc(c.sym)}</div>
       <div class="meta">
-        <div class="code">DMC ${esc(c.code)}</div>
+        <div class="code">DMC ${esc(c.code)}${c.bs?' <small style="font-weight:400;color:var(--muted)">бэкстич</small>':""}</div>
         <div class="name">${esc(c.name)}</div>
         <div class="tbar"><i style="width:${pc}%;background:${hex(c)}"></i></div>
       </div>
-      <div class="num">${d}/${c.count}<br>${pc}%</div>
+      <div class="num">${d}/${t}<br>${pc}%</div>
       <button class="btn ghost" data-skip="${i}" title="Не вышивать этот цвет" style="padding:4px 6px">${c.skip?"○":"◉"}</button>
       <button class="btn ghost" data-all="${i}" title="Отметить весь цвет" style="padding:4px 6px">✓</button>`;
     el.onclick=ev=>{
       if(ev.target.dataset.skip!==undefined){
         c.skip=!c.skip;
-        if(c.skip) for(let j=0;j<S.grid.length;j++) if(S.grid[j]===i) S.done[j]=0;
+        if(c.skip) setThread(i,0);
         renderThreads(); updateProgress(); draw(); queueSave(); return;
       }
       if(ev.target.dataset.all!==undefined){
-        const full=d===c.count;
-        S.undo.push(S.done.slice());
-        for(let j=0;j<S.grid.length;j++) if(S.grid[j]===i) S.done[j]=full?0:1;
+        pushUndo({done:S.done.slice(), lineDone:S.lineDone.slice()});
+        setThread(i, d===t?0:1);
         renderThreads(); updateProgress(); draw(); queueSave(); return;
       }
       S.sel = S.sel===i?-1:i;
@@ -916,7 +1012,7 @@ function renderThreads(){
       const b=$("#badge");
       if(S.sel>=0){
         b.classList.remove("hidden");
-        b.innerHTML=`<span class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${esc(c.sym)}</span> DMC ${esc(c.code)} · осталось ${c.count-d}`;
+        b.innerHTML=`<span class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${c.bs?"╱":esc(c.sym)}</span> DMC ${esc(c.code)} · осталось ${t-d}`;
       } else b.classList.add("hidden");
       if(innerWidth<860) setSheet(false);
     };
@@ -929,6 +1025,10 @@ function updateProgress(){
     if(S.colors[S.grid[i]].skip) continue;
     total++; if(S.done[i]) d++;
   }
+  S.lines.forEach((l,li)=>{
+    if(S.colors[l.c].skip) return;
+    total+=l.segs.length; if(S.lineDone[li]) d+=l.segs.length;
+  });
   const pc=total?Math.round(d/total*100):0;
   $("#pctNum").textContent=pc+"%";
   $("#pctAbs").textContent=`${d.toLocaleString("ru")}/${total.toLocaleString("ru")}`;
@@ -940,9 +1040,11 @@ let saveT;
 function queueSave(){clearTimeout(saveT);saveT=setTimeout(saveProject,700)}
 $("#save").onclick=()=>{saveProject();toast("Сохранено")};
 function pack(){
-  return {v:1,id:S.id,name:S.name,w:S.w,h:S.h,count:S.count,
-    colors:S.colors.map(c=>({code:c.code,name:c.name,r:c.r,g:c.g,b:c.b,sym:c.sym,count:c.count,skip:!!c.skip})),
-    grid:rle(S.grid), done:rle(S.done), at:Date.now()};
+  return {v:2,id:S.id,name:S.name,w:S.w,h:S.h,count:S.count,
+    colors:S.colors.map(c=>({code:c.code,name:c.name,r:c.r,g:c.g,b:c.b,sym:c.sym,count:c.count,skip:!!c.skip,bs:!!c.bs})),
+    grid:rle(S.grid), done:rle(S.done),
+    lines:S.lines.map(l=>({c:l.c, s:l.segs.flat()})), lineDone:S.lines.length?rle(S.lineDone):[],
+    at:Date.now()};
 }
 async function saveProject(){
   if(!S.id) return;
@@ -960,6 +1062,9 @@ function unpack(p){
     colors:p.colors.map(c=>({...c,lab:rgb2lab(c.r,c.g,c.b)})),
     sel:-1, undo:[]
   });
+  // v1 (старые сохранения) — без бэкстича
+  S.lines=(p.lines||[]).map(l=>{ const segs=[]; for(let i=0;i<l.s.length;i+=2) segs.push([l.s[i],l.s[i+1]]); return {c:l.c, segs}; });
+  S.lineDone=p.lineDone&&p.lineDone.length ? unrle(p.lineDone,Uint8Array) : new Uint8Array(S.lines.length);
 }
 async function refreshProjects(){
   const list=(await store.get("stitch:index"))||[];
