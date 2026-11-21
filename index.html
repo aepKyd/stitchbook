@@ -678,7 +678,7 @@ function openWork(){
   $("#progWrap").classList.remove("hidden");
   $("#backBtn").classList.remove("hidden");
   $("#projName").textContent="· "+S.name;
-  hintShown=false; stroke=null;
+  hintShown=false; G.reset(); stroke=null; scheduleHold();
   resize(); renderThreads(); updateProgress();
 }
 $("#backBtn").onclick=()=>{
@@ -802,7 +802,8 @@ const G=Gestures.create({
   }
 });
 const ptr=e=>({id:e.pointerId, kind:e.pointerType==="pen"?"pen":e.pointerType==="mouse"?"mouse":"touch",
-  button:e.button, x:e.clientX, y:e.clientY, t:e.timeStamp});
+  button:e.button, primary:e.isPrimary, x:e.clientX, y:e.clientY,
+  t:performance.now()});   // одна шкала с таймером удержания (в старом WebKit timeStamp — от эпохи)
 function scheduleHold(){
   clearTimeout(holdT); holdT=null;
   const d=G.holdDeadline();
@@ -816,6 +817,8 @@ cv.addEventListener("pointermove",e=>{ G.move(ptr(e)); scheduleHold(); });
 cv.addEventListener("pointerup",e=>{ G.up(ptr(e)); scheduleHold(); });
 cv.addEventListener("pointercancel",e=>{ G.cancel(ptr(e)); scheduleHold(); });
 cv.addEventListener("contextmenu",e=>e.preventDefault());
+// свернули приложение посреди жеста — up может не прийти
+document.addEventListener("visibilitychange",()=>{ if(document.visibilityState==="hidden"){ G.reset(); scheduleHold(); } });
 cv.addEventListener("wheel",e=>{
   e.preventDefault();
   const r=cv.getBoundingClientRect(), k=Math.exp(-e.deltaY*0.0015);

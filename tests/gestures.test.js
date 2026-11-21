@@ -183,3 +183,65 @@ test("cancel во время отметки сохраняет ряд", () => {
   g.cancel(P(1, "pen", 30, 10, 20));
   assert.deepEqual(log.at(-1), { type: "markEnd" });
 });
+
+/* --- правки по финальному ревью --- */
+
+test("I-1: cancel пальца во время отметки откатывает", () => {
+  const { g, P, types } = setup();
+  g.down(P(1, "touch", 100, 100, 0));
+  g.tick(300);
+  g.move(P(1, "touch", 140, 100, 350));
+  g.cancel(P(1, "touch", 140, 100, 400));
+  assert.equal(types().at(-1), "markCancel");
+  assert.ok(!types().includes("markEnd"));
+});
+
+test("I-2: ладонь в паузе между штрихами Pencil не отмечает", () => {
+  const { g, P, types } = setup();
+  g.down(P(1, "pen", 10, 10, 0));
+  g.up(P(1, "pen", 10, 10, 100));
+  const n = types().length;
+  g.down(P(2, "touch", 300, 300, 500));
+  assert.equal(g.holdDeadline(), null);
+  g.tick(900);
+  g.up(P(2, "touch", 300, 300, 1000));
+  assert.equal(types().length, n);   // ни отметки, ни зума, ни подсказки
+});
+
+test("I-2: в окне после Pencil палец всё ещё двигает схему", () => {
+  const { g, P, types } = setup();
+  g.down(P(1, "pen", 10, 10, 0));
+  g.up(P(1, "pen", 10, 10, 100));
+  g.down(P(2, "touch", 300, 300, 500));
+  g.move(P(2, "touch", 340, 300, 550));
+  assert.equal(types().at(-1), "pan");
+});
+
+test("I-2: через 2 с после Pencil палец снова отмечает удержанием", () => {
+  const { g, P } = setup();
+  g.down(P(1, "pen", 10, 10, 0));
+  g.up(P(1, "pen", 10, 10, 100));
+  g.down(P(2, "touch", 300, 300, 2100));
+  assert.equal(g.holdDeadline(), 2400);
+});
+
+test("M-3: потерянный up не оставляет призрачного пальца", () => {
+  const { g, P, types } = setup();
+  g.down({ ...P(1, "touch", 100, 100, 0), primary: true });
+  // up для id 1 потерян
+  g.down({ ...P(2, "touch", 200, 200, 5000), primary: true });
+  assert.equal(g.holdDeadline(), 5300);
+  g.move(P(2, "touch", 240, 200, 5050));
+  assert.equal(types().at(-1), "pan");
+  assert.ok(!types().includes("pinch"));
+});
+
+test("M-3: reset сбрасывает жест и откатывает начатую отметку", () => {
+  const { g, P, types } = setup();
+  g.down(P(1, "touch", 100, 100, 0));
+  g.tick(300);
+  g.reset();
+  assert.equal(types().at(-1), "markCancel");
+  g.down(P(2, "touch", 10, 10, 1000));
+  assert.equal(g.holdDeadline(), 1300);
+});
