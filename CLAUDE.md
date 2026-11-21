@@ -52,13 +52,13 @@ bd close <id>         # Complete work
 
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+node --test tests/*.test.js           # юнит-тесты (без зависимостей, Node 18+)
+python3 -m http.server 8765           # запустить приложение локально
 ```
+
+После правок, которые меняют закэшированные файлы, поднять `VERSION` в `sw.js`;
+новый статический файл — добавить в `ASSETS` там же.
 
 ## Architecture Overview
 
@@ -67,3 +67,10 @@ _Add a brief overview of your project architecture_
 ## Conventions & Patterns
 
 _Add your project-specific conventions here_
+
+## OpenSpec и superpowers
+- Вход в любую задачу — superpowers:brainstorming. Skills openspec-propose и openspec-explore сами по себе не запускать.
+- Когда brainstorming классифицировал задачу как architectural, структуру change создать через `openspec new change <id>` (или `/opsx:propose <id>`), а содержимое proposal.md, specs/ и design.md написать по итогам brainstorming. tasks.md из OpenSpec не заполнять — задачи живут в плане superpowers.
+- `/opsx:apply` не использовать: исполнение идёт через writing-plans и SDD/executing-plans.
+- `openspec archive <id>` — после merge PR, как часть чеклиста закрытия.
+- Хук require-plan защищает любой каталог `src/` на любой глубине. Если код лежит иначе — перечислить каталоги (префиксы от корня, по одному в строке) в `.claude/code-paths`.

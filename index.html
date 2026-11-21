@@ -190,8 +190,12 @@ label.btn{display:inline-block}
 
     <div class="drop" id="drop">
       <input type="file" id="file" accept="image/*" class="sr">
-      <label class="btn primary" for="file">Выбрать фото</label>
-      <p>или перетащите файл сюда</p>
+      <input type="file" id="importFile" class="sr">
+      <div class="row" style="justify-content:center">
+        <label class="btn primary" for="file">Выбрать фото</label>
+        <label class="btn" for="importFile">Открыть файл схемы</label>
+      </div>
+      <p>или перетащите сюда фото или <code>.stitch.json</code></p>
       <p id="loadStatus" class="hint" style="min-height:1.2em"></p>
     </div>
 
@@ -271,6 +275,7 @@ label.btn{display:inline-block}
 <div class="busy hidden" id="busy">считаю палитру…</div>
 <div class="updbar hidden" id="updbar"><span class="t">Вышла новая версия</span><button class="btn" id="updBtn">Обновить</button></div>
 
+<script src="stitchfile.js"></script>
 <script>
 "use strict";
 /* ============================ палитра DMC ============================ */
@@ -445,6 +450,8 @@ const S={
   undo:[], img:null, crop:null
 };
 const $=s=>document.querySelector(s);
+// имена и коды могут прийти из импортированного файла — в innerHTML только экранированными
+const esc=s=>String(s).replace(/[&<>"']/g,ch=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[ch]));
 const cv=$("#chart"), ctx=cv.getContext("2d");
 let toastT;
 function toast(msg){const t=$("#toast");t.textContent=msg;t.classList.add("show");clearTimeout(toastT);toastT=setTimeout(()=>t.classList.remove("show"),1800)}
@@ -454,13 +461,39 @@ const srcCv=$("#srcCv"), srcCtx=srcCv.getContext("2d");
 $("#file").addEventListener("change",e=>{
   const f=e.target.files&&e.target.files[0];
   if(!f){ setStatus("Файл не пришёл от системы",true); return; }
-  loadImage(f);
+  openFile(f);
   e.target.value="";   // чтобы тот же файл можно было выбрать повторно
+});
+/* без accept: на iOS фильтр по .json делает файлы схемы серыми в «Файлах» */
+$("#importFile").addEventListener("change",e=>{
+  const f=e.target.files&&e.target.files[0];
+  if(!f){ setStatus("Файл не пришёл от системы",true); return; }
+  importStitchFile(f);
+  e.target.value="";
 });
 const drop=$("#drop");
 ["dragenter","dragover"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.add("over")}));
 ["dragleave","drop"].forEach(ev=>drop.addEventListener(ev,e=>{e.preventDefault();drop.classList.remove("over")}));
-drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)loadImage(f)});
+drop.addEventListener("drop",e=>{const f=e.dataTransfer.files[0];if(f)openFile(f)});
+function openFile(f){ StitchFile.looksLikeStitchFile(f) ? importStitchFile(f) : loadImage(f); }
+
+async function importStitchFile(file){
+  setStatus(`Открываю ${file.name||"файл"}…`);
+  let p;
+  try{ p=StitchFile.parseStitchFile(await file.text()); }
+  catch(e){ setStatus("Не получилось открыть схему: "+e.message,true); return; }
+  if(await store.get("stitch:"+p.id)){
+    const replace=confirm(`Схема «${p.name}» уже есть на этом устройстве.\n\n`+
+      `OK — заменить её данными из файла (прогресс на устройстве пропадёт).\n`+
+      `Отмена — сохранить файл отдельной копией.`);
+    if(!replace){ p.id="p"+Date.now().toString(36); p.name+=" (копия)"; }
+  }
+  unpack(p);
+  await saveProject();
+  setStatus("");
+  openWork(); fitView();
+  toast("Схема открыта из файла");
+}
 addEventListener("paste",e=>{
   const it=[...(e.clipboardData?.items||[])].find(i=>i.type.startsWith("image/"));
   if(it){const f=it.getAsFile(); if(f){loadImage(f);toast("Картинка из буфера");}}
@@ -850,10 +883,10 @@ function renderThreads(){
     const el=document.createElement("div");
     el.className="th"+(S.sel===i?" sel":"")+(c.skip?" skip":"");
     el.innerHTML=`
-      <div class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${c.sym}</div>
+      <div class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${esc(c.sym)}</div>
       <div class="meta">
-        <div class="code">DMC ${c.code}</div>
-        <div class="name">${c.name}</div>
+        <div class="code">DMC ${esc(c.code)}</div>
+        <div class="name">${esc(c.name)}</div>
         <div class="tbar"><i style="width:${pc}%;background:${hex(c)}"></i></div>
       </div>
       <div class="num">${d}/${c.count}<br>${pc}%</div>
@@ -876,7 +909,7 @@ function renderThreads(){
       const b=$("#badge");
       if(S.sel>=0){
         b.classList.remove("hidden");
-        b.innerHTML=`<span class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${c.sym}</span> DMC ${c.code} · осталось ${c.count-d}`;
+        b.innerHTML=`<span class="sw" style="background:${hex(c)};color:${isDark(c)?"#fff":"#111"}">${esc(c.sym)}</span> DMC ${esc(c.code)} · осталось ${c.count-d}`;
       } else b.classList.add("hidden");
       if(innerWidth<860) setSheet(false);
     };
@@ -928,7 +961,7 @@ async function refreshProjects(){
   box.innerHTML=`<h2 style="font-family:var(--display);font-size:13px;margin:0 0 8px">Мои схемы</h2>`;
   for(const p of list){
     const el=document.createElement("div"); el.className="proj";
-    el.innerHTML=`<div class="t"><b>${p.name}</b><small>${p.w}×${p.h} · ${new Date(p.at).toLocaleDateString("ru")}</small></div>
+    el.innerHTML=`<div class="t"><b>${esc(p.name)}</b><small>${p.w}×${p.h} · ${new Date(p.at).toLocaleDateString("ru")}</small></div>
       <button class="btn" data-open="${p.id}">Открыть</button>
       <button class="btn ghost" data-del="${p.id}">Удалить</button>`;
     el.onclick=async ev=>{
